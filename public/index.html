@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>公众号文章改写工具</title>
+<style>
+:root {
+  --bg: #0d0d14; --surface: #1a1a28; --border: #2a2a3e;
+  --accent: #6C5CE7; --accent2: #a29bfe; --text: #e4e4ec; --text-muted: #8888a0;
+  --green: #00B894; --red: #e17055; --orange: #F39C12;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+header { text-align:center; padding:40px 16px 24px; }
+header h1 { font-size:1.6rem; font-weight:800; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+.container { max-width:960px; margin:0 auto; padding:0 16px 80px; }
+
+/* 导航tabs */
+.nav-tabs { display:flex; gap:4px; margin-bottom:20px; background:var(--surface); border-radius:12px; padding:4px; border:1px solid var(--border); }
+.nav-tab { flex:1; padding:10px 12px; text-align:center; cursor:pointer; border-radius:10px; font-size:0.82rem; font-weight:600; color:var(--text-muted); transition:all 0.2s; border:none; background:none; font-family:inherit; }
+.nav-tab:hover { color:var(--text); }
+.nav-tab.active { background:#1e1e38; color:var(--accent2); }
+
+/* 通用卡片 */
+.card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:24px; margin-bottom:16px; }
+.card-title { font-size:0.85rem; font-weight:700; color:var(--accent2); margin-bottom:14px; }
+
+/* 输入 */
+.input-row { display:flex; gap:8px; flex-wrap:wrap; }
+.input-row input, .input-row textarea { flex:1; min-width:200px; padding:12px 16px; font-size:0.9rem; background:var(--bg); border:2px solid var(--border); border-radius:10px; color:var(--text); outline:none; font-family:inherit; }
+.input-row input:focus, .input-row textarea:focus { border-color:var(--accent); }
+.input-row input::placeholder, textarea::placeholder { color:var(--text-muted); }
+
+.options-row { display:flex; gap:12px; align-items:center; margin-top:14px; flex-wrap:wrap; }
+.options-row label { font-size:0.78rem; color:var(--text-muted); font-weight:600; white-space:nowrap; }
+.options-row select { padding:8px 14px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:0.82rem; font-family:inherit; cursor:pointer; appearance:auto; -webkit-appearance:auto; }
+
+/* 按钮 */
+.btn { padding:11px 22px; font-size:0.85rem; font-weight:700; border:none; border-radius:10px; cursor:pointer; transition:all 0.2s; white-space:nowrap; font-family:inherit; }
+.btn-primary { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; }
+.btn-primary:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 6px 20px rgba(108,92,231,0.3); }
+.btn-primary:disabled { opacity:0.5; cursor:not-allowed; }
+.btn-sm { padding:6px 14px; font-size:0.75rem; border-radius:8px; }
+.btn-accent { background:var(--accent); color:#fff; }
+.btn-green { background:var(--green); color:#fff; }
+.btn-orange { background:var(--orange); color:#fff; }
+.btn-outline { background:transparent; color:var(--text); border:1px solid var(--border); font-size:0.78rem; padding:8px 16px; font-weight:600; }
+.btn-outline:hover { border-color:var(--accent2); }
+.btn:disabled { opacity:0.5; cursor:not-allowed; }
+
+/* 原文区 */
+.original-body { font-size:0.86rem; line-height:1.8; color:var(--text-muted); max-height:250px; overflow-y:auto; white-space:pre-wrap; padding-right:8px; }
+
+/* 版本tabs */
+.v-tabs { display:flex; gap:4px; margin-bottom:16px; }
+.v-tab { flex:1; padding:10px; text-align:center; background:var(--surface); border:1px solid var(--border); border-radius:10px; font-size:0.82rem; font-weight:700; cursor:pointer; color:var(--text-muted); transition:all 0.2s; }
+.v-tab:hover { border-color:var(--accent2); }
+.v-tab.active { background:#1e1e38; border-color:var(--accent); color:var(--accent2); }
+.v-tab .vt-desc { font-size:0.68rem; opacity:0.6; margin-top:2px; }
+
+/* 结果 */
+.result-content { font-size:0.92rem; line-height:2; white-space:pre-wrap; color:var(--text); }
+.result-content h1,.result-content h2,.result-content h3 { color:var(--accent2); margin:20px 0 10px; font-weight:700; }
+.result-content h1 { font-size:1.4rem; } .result-content h2 { font-size:1.1rem; } .result-content h3 { font-size:0.95rem; }
+.result-content strong { color:#fff; font-weight:700; }
+.result-content p { margin-bottom:10px; }
+
+/* 标题工厂 */
+.hl-grid { display:flex; flex-direction:column; gap:16px; }
+.hl-cat { font-size:0.75rem; font-weight:700; color:var(--accent2); text-transform:uppercase; letter-spacing:0.05em; }
+.hl-list { display:flex; flex-direction:column; gap:6px; }
+.hl-item { display:flex; align-items:center; gap:8px; padding:8px 14px; background:var(--bg); border-radius:8px; font-size:0.88rem; }
+.hl-item .hl-num { color:var(--accent); font-weight:700; font-size:0.75rem; flex-shrink:0; }
+.hl-item .hl-text { flex:1; }
+
+/* 原创度 */
+.sim-score { text-align:center; padding:16px; }
+.sim-badge { display:inline-block; padding:8px 24px; border-radius:20px; font-size:1.2rem; font-weight:800; }
+.sim-badge.safe { background:rgba(0,184,148,0.15); color:var(--green); }
+.sim-badge.warn { background:rgba(243,156,18,0.15); color:var(--orange); }
+.sim-badge.danger { background:rgba(225,112,85,0.15); color:var(--red); }
+.sim-issue { padding:10px 14px; background:var(--bg); border-radius:8px; margin-top:8px; font-size:0.82rem; }
+.sim-issue .sim-tag { display:inline-block; padding:2px 8px; border-radius:4px; font-size:0.7rem; font-weight:700; margin-right:6px; }
+.sim-tag.high { background:rgba(225,112,85,0.2); color:var(--red); }
+.sim-tag.medium { background:rgba(243,156,18,0.2); color:var(--orange); }
+
+/* 多源缝合 */
+.multi-urls { display:flex; flex-direction:column; gap:8px; }
+
+/* 历史 */
+.hist-item { padding:14px 18px; background:var(--bg); border-radius:10px; margin-bottom:8px; cursor:pointer; transition:all 0.2s; }
+.hist-item:hover { border-color:var(--accent2); background:#1e1e30; }
+.hist-item .hi-title { font-weight:700; font-size:0.9rem; }
+.hist-item .hi-meta { font-size:0.72rem; color:var(--text-muted); margin-top:4px; display:flex; gap:12px; flex-wrap:wrap; }
+.hist-tags { display:flex; gap:4px; flex-wrap:wrap; margin-top:6px; }
+.hist-tag { padding:2px 8px; background:rgba(108,92,231,0.12); color:var(--accent2); border-radius:4px; font-size:0.68rem; }
+
+/* 弹窗 */
+.modal { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); z-index:100; align-items:center; justify-content:center; }
+.modal.show { display:flex; }
+.modal-inner { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:28px; max-width:700px; width:95%; max-height:80vh; overflow-y:auto; }
+
+.spinner { display:inline-block; width:18px; height:18px; border:2px solid rgba(255,255,255,0.2); border-top-color:#fff; border-radius:50%; animation:spin 0.6s linear infinite; vertical-align:middle; margin-right:6px; }
+@keyframes spin { to{transform:rotate(360deg);} }
+.error-msg { background:rgba(225,112,85,0.12); border:1px solid var(--red); border-radius:10px; padding:14px 18px; color:var(--red); font-size:0.85rem; }
+.loading-block { text-align:center; padding:36px; color:var(--text-muted); }
+.toast { position:fixed; top:20px; left:50%; transform:translateX(-50%); background:var(--green); color:#fff; padding:10px 24px; border-radius:20px; font-size:0.85rem; font-weight:700; z-index:200; opacity:0; transition:opacity 0.3s; pointer-events:none; }
+.toast.show { opacity:1; }
+
+@media (max-width:768px) {
+  header { padding:20px 12px 16px; }
+  header h1 { font-size:1.2rem; }
+  .container { padding:0 8px 60px; }
+
+  /* 导航 — 横向滚动 */
+  .nav-tabs { gap:2px; padding:3px; border-radius:10px; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .nav-tab { flex:none; padding:8px 10px; font-size:0.7rem; border-radius:8px; white-space:nowrap; min-width:fit-content; }
+
+  /* 卡片 */
+  .card { padding:16px; border-radius:10px; margin-bottom:12px; }
+  .card-title { font-size:0.8rem; margin-bottom:10px; }
+
+  /* 输入 */
+  .input-row { flex-direction:column; gap:6px; }
+  .input-row input, .input-row textarea { min-width:auto; width:100%; padding:12px 14px; font-size:16px; }
+  .input-row input[type="text"] { font-size:16px; } /* 防iOS缩放 */
+  .options-row { gap:6px; margin-top:10px; }
+  .options-row label { font-size:0.72rem; }
+  .options-row select { padding:10px 12px; font-size:16px; }
+
+  /* 按钮 — 44px+ 触控区 */
+  .btn { padding:12px 18px; font-size:0.82rem; min-height:44px; }
+  .btn-sm { padding:8px 12px; font-size:0.72rem; min-height:36px; }
+
+  /* 版本tabs */
+  .v-tabs { gap:2px; }
+  .v-tab { padding:8px 6px; font-size:0.72rem; border-radius:8px; }
+  .v-tab .vt-desc { font-size:0.62rem; }
+
+  /* 结果内容 */
+  .result-content { font-size:0.88rem; line-height:1.9; }
+
+  /* 存档表格 — 横向滚动 */
+  #archiveTable { overflow-x:auto; -webkit-overflow-scrolling:touch; border-radius:10px; }
+  #archiveTable table { min-width:650px; font-size:0.75rem; }
+  #archiveTable th, #archiveTable td { padding:8px 6px; }
+
+  /* 存档搜索栏 */
+  #tab-archive .card { padding:12px; }
+  #tab-archive input, #tab-archive select { font-size:16px; padding:10px; }
+
+  /* 弹窗 — 全屏 */
+  .modal { align-items:flex-end; }
+  .modal.show { align-items:flex-start; }
+  .modal-inner { max-width:100%; width:100%; border-radius:16px 16px 0 0; max-height:90vh; padding:20px 16px; }
+
+  /* 排版预览 */
+  #fmtPreviewWrap { max-height:50vh; }
+
+  /* 配图网格 */
+  .modal-inner img { max-width:100%; height:auto; }
+
+  /* Toast */
+  .toast { top:auto; bottom:30px; font-size:0.8rem; padding:10px 20px; }
+
+  /* 配图网格改为2列 */
+  .modal-inner [style*="grid-template-columns:repeat(3"] {
+    grid-template-columns:repeat(2,1fr) !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<header><h1>公众号文章改写工具</h1></header>
+
+<div class="container">
+  <!-- 导航 -->
+  <div class="nav-tabs">
+    <button class="nav-tab active" data-tab="rewrite" onclick="switchTab('rewrite')">✍️ 改写文章</button>
+    <button class="nav-tab" data-tab="multi" onclick="switchTab('multi')">🧩 多源缝合</button>
+    <button class="nav-tab" data-tab="style" onclick="switchTab('style')">🎨 风格管理</button>
+    <button class="nav-tab" data-tab="history" onclick="switchTab('history')">📚 历史记录</button>
+    <button class="nav-tab" data-tab="archive" onclick="switchTab('archive')">📦 存档库</button>
+  </div>
+
+  <!-- 改写文章 Tab -->
+  <div id="tab-rewrite">
+    <div class="card">
+      <div class="card-title">文章链接</div>
+      <div class="input-row">
+        <input type="text" id="urlInput" placeholder="粘贴公众号/网页文章链接…" />
+        <button class="btn btn-primary" id="extractBtn" onclick="doExtract()">📥 提取原文</button>
+        <button class="btn btn-outline" onclick="toggleManual()">📝 手动输入</button>
+      </div>
+      <div id="manualArea" style="display:none; margin-top:12px;">
+        <textarea id="manualContent" placeholder="在此粘贴原文全文…" style="width:100%;min-height:200px;"></textarea>
+        <input type="text" id="manualTitle" placeholder="文章标题（可选）" style="width:100%;margin-top:8px;" />
+        <button class="btn btn-primary" onclick="useManualContent()" style="margin-top:8px;">✍️ 用此原文改写</button>
+      </div>
+      <div class="options-row">
+        <label>目标字数</label>
+        <select id="targetSelect">
+          <option value="1000">1000字</option><option value="1200">1200字</option>
+          <option value="1400" selected>1400字（推荐）</option>
+          <option value="1600">1600字</option><option value="2000">2000字</option>
+        </select>
+        <label style="margin-left:8px;">水准</label>
+        <select id="levelSelect">
+          <option value="pro" selected>专业级</option><option value="normal">普通人</option>
+        </select>
+        <label style="margin-left:8px;">风格</label>
+        <select id="styleSelect"><option value="">默认</option></select>
+      </div>
+    </div>
+
+    <div id="originalCard" class="card" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div class="card-title" id="origTitle" style="margin-bottom:0;"></div>
+        <div style="font-size:0.75rem;color:var(--text-muted);" id="origMeta"></div>
+      </div>
+      <div class="original-body" id="origBody"></div>
+      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="rewriteBtn" onclick="doRewrite()">✍️ 开始改写</button>
+        <button class="btn btn-outline btn-sm" onclick="doHeadlinesFromOriginal()">📰 生成标题</button>
+      </div>
+    </div>
+
+    <div id="errorArea"></div>
+    <div id="loadingArea"></div>
+
+    <div id="resultsArea" style="display:none;">
+      <div class="v-tabs" id="versionTabs"></div>
+      <div id="versionDisplay"></div>
+    </div>
+  </div>
+
+  <!-- 多源缝合 Tab -->
+  <div id="tab-multi" style="display:none;">
+    <div class="card">
+      <div class="card-title">粘贴2-3篇同主题文章链接，融合成一篇</div>
+      <div class="multi-urls" id="multiUrls">
+        <input type="text" placeholder="文章链接 1" class="multi-url" />
+        <input type="text" placeholder="文章链接 2" class="multi-url" />
+        <input type="text" placeholder="文章链接 3（可选）" class="multi-url" />
+      </div>
+      <div class="options-row">
+        <label>目标字数</label>
+        <select id="multiTarget">
+          <option value="1200">1200字</option><option value="1500" selected>1500字</option>
+          <option value="1800">1800字</option><option value="2000">2000字</option>
+        </select>
+        <label>水准</label>
+        <select id="multiLevel"><option value="pro" selected>专业级</option><option value="normal">普通人</option></select>
+        <label>风格</label>
+        <select id="multiStyle"><option value="">默认</option></select>
+      </div>
+      <button class="btn btn-primary" id="mergeBtn" onclick="doMerge()" style="margin-top:12px;">🧩 融合生成</button>
+    </div>
+    <div id="mergeResult" style="display:none;" class="card">
+      <div class="card-title">融合结果</div>
+      <div class="result-content" id="mergeContent"></div>
+      <div style="margin-top:16px;display:flex;gap:8px;">
+        <button class="btn btn-green btn-sm" onclick="copyText(document.getElementById('mergeContent').textContent)">📋 复制</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 风格管理 Tab -->
+  <div id="tab-style" style="display:none;">
+    <div class="card">
+      <div class="card-title">创建风格档案</div>
+      <div class="input-row">
+        <input type="text" id="styleName" placeholder="风格名称，如：我的风格" style="max-width:200px;" />
+      </div>
+      <div style="margin-top:12px;">
+        <div class="card-title" style="font-size:0.78rem;">上传2-3篇你自己的文章</div>
+        <div id="styleArticles"></div>
+        <button class="btn btn-outline btn-sm" onclick="addStyleArticle()" style="margin-top:8px;">+ 添加文章</button>
+      </div>
+      <button class="btn btn-primary" onclick="doAnalyzeStyle()" style="margin-top:12px;">🔬 分析风格</button>
+    </div>
+    <div class="card">
+      <div class="card-title">已有风格档案</div>
+      <div id="styleList">加载中…</div>
+    </div>
+  </div>
+
+  <!-- 历史记录 Tab -->
+  <div id="tab-history" style="display:none;">
+    <div class="card">
+      <div class="input-row">
+        <input type="text" id="histSearch" placeholder="搜索关键词…" oninput="loadHistory()" />
+        <button class="btn btn-outline btn-sm" onclick="loadHistory()">🔍 搜索</button>
+      </div>
+    </div>
+    <div id="historyList"></div>
+  </div>
+
+  <!-- 存档库 Tab -->
+  <div id="tab-archive" style="display:none;">
+    <div class="card" style="padding:16px 20px;">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="text" id="archSearch" placeholder="搜索标题/链接/内容…" style="flex:1;min-width:180px;padding:10px 14px;font-size:0.85rem;background:var(--bg);border:2px solid var(--border);border-radius:10px;color:var(--text);outline:none;font-family:inherit;" oninput="loadArchive()" />
+        <select id="archLevel" onchange="loadArchive()" style="padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.82rem;font-family:inherit;">
+          <option value="all">全部水准</option><option value="pro">专业级</option><option value="normal">普通人</option>
+        </select>
+        <select id="archSort" onchange="loadArchive()" style="padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.82rem;font-family:inherit;">
+          <option value="newest">最新在前</option><option value="oldest">最早在前</option><option value="title">按标题</option>
+        </select>
+        <button class="btn btn-green btn-sm" onclick="exportArchiveCsv()">📥 导出CSV</button>
+      </div>
+      <div id="archTags" style="margin-top:10px;display:flex;gap:4px;flex-wrap:wrap;"></div>
+    </div>
+    <div id="archiveTable" style="overflow-x:auto;"></div>
+    <div id="archivePager" style="text-align:center;padding:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;"></div>
+  </div>
+</div>
+
+<!-- 弹窗 -->
+<div class="modal" id="modal"><div class="modal-inner" id="modalInner"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ── 全局状态 ──
+const S = { tab:"rewrite", article:null, versions:[], activeVer:0, mergeContent:"", styles:[] };
+
+// ── 导航 ──
+function switchTab(tab) {
+  S.tab = tab;
+  document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
+  document.querySelector(`[data-tab="${tab}"]`).classList.add("active");
+  ["rewrite","multi","style","history","archive"].forEach(t => document.getElementById(`tab-${t}`).style.display = t===tab?"block":"none");
+  if (tab==="style") loadStyles();
+  if (tab==="history") loadHistory();
+  if (tab==="archive") loadArchive();
+}
+
+// ── Toast ──
+function toast(msg) { const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2000); }
+
+// ── 手动输入 ──
+function toggleManual() { const a=document.getElementById("manualArea"); a.style.display=a.style.display==="none"?"block":"none"; }
+function useManualContent() {
+  const content=document.getElementById("manualContent").value.trim();
+  if(!content) return alert("请粘贴原文");
+  S.article={ title:document.getElementById("manualTitle").value.trim()||"手动输入", content, length:content.length, url:"", siteName:"手动输入" };
+  S.versions=[]; showOriginal();
+}
+
+// ── 提取 ──
+async function doExtract() {
+  const url=document.getElementById("urlInput").value.trim(); if(!url) return alert("请粘贴链接");
+  const btn=document.getElementById("extractBtn"); btn.disabled=true; btn.innerHTML='<span class="spinner"></span>提取中…';
+  hideResults(); clearError();
+  try {
+    const r=await fetch("/api/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error);
+    S.article=d; S.versions=[]; showOriginal();
+  }catch(e){showError(e.message)}finally{btn.disabled=false;btn.textContent="📥 提取原文";}
+}
+function showOriginal() {
+  if(!S.article) return;
+  document.getElementById("originalCard").style.display="block";
+  document.getElementById("origTitle").textContent=S.article.title;
+  document.getElementById("origMeta").textContent=S.article.length+"字 · "+(S.article.siteName||"");
+  document.getElementById("origBody").textContent=S.article.content.slice(0,2000)+(S.article.length>2000?"\n\n…（预览截断）":"");
+}
+
+// ── 改写 ──
+async function doRewrite() {
+  if(!S.article) return;
+  const targetLength=parseInt(document.getElementById("targetSelect").value);
+  const level=document.getElementById("levelSelect").value;
+  const styleId=document.getElementById("styleSelect").value;
+  const btn=document.getElementById("rewriteBtn"); btn.disabled=true; btn.innerHTML='<span class="spinner"></span>改写中…';
+  document.getElementById("loadingArea").innerHTML='<div class="loading-block"><div class="spinner"></div> AI正在深度改写…</div>';
+  clearError();
+  try {
+    const body={url:S.article.url||"",targetLength,level};
+    if(styleId) body.styleId=styleId;
+    // 手动输入模式：直接传content
+    if(!body.url && S.article.content) body.content=S.article.content;
+    const r=await fetch("/api/rewrite",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error);
+    S.versions=d.versions; S.activeVer=0;
+    document.getElementById("loadingArea").innerHTML="";
+    showResults();
+    // 自动保存历史
+    try {
+      await fetch("/api/history",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({originalTitle:S.article.title,originalUrl:S.article.url,versions:d.versions,level,targetLength})});
+    }catch(e){}
+  }catch(e){document.getElementById("loadingArea").innerHTML="";showError(e.message)}
+  finally{btn.disabled=false;btn.textContent="✍️ 开始改写";}
+}
+
+// ── 结果展示 ──
+function showResults() {
+  document.getElementById("resultsArea").style.display="block";
+  renderVersionTabs(); renderVersion(S.activeVer);
+}
+function renderVersionTabs() {
+  const labels=getLabels();
+  document.getElementById("versionTabs").innerHTML=S.versions.map((v,i)=>
+    `<div class="v-tab ${i===S.activeVer?'active':''}" onclick="switchVersion(${i})">${labels[v.version].label}<div class="vt-desc">${labels[v.version].desc}</div></div>`).join("");
+}
+function switchVersion(i){ S.activeVer=i; renderVersionTabs(); renderVersion(i); }
+function getLabels() {
+  const level=document.getElementById("levelSelect").value||"pro";
+  const labels={
+    pro:{A:{label:"A·深度长文",desc:"专栏质感"},B:{label:"B·轻松聊天",desc:"手机友好"},C:{label:"C·观点犀利",desc:"有棱角"}},
+    normal:{A:{label:"A·认真分享",desc:"仔细但朴实"},B:{label:"B·随性唠嗑",desc:"想到哪说哪"},C:{label:"C·老实碎碎念",desc:"啰嗦但真诚"}},
+  };
+  return labels[level]||labels.pro;
+}
+function renderVersion(i) {
+  const v=S.versions[i]; if(!v) return;
+  const labels=getLabels();
+  const wc=v.content.replace(/[#*\-\s\n`>|]/g,"").length;
+  document.getElementById("versionDisplay").innerHTML=`
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+        <span style="font-size:0.8rem;color:var(--text-muted);">${labels[v.version].label} · 约${wc}字</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-sm btn-accent" onclick="doHumanize(${i})">🧹 去AI味</button>
+          <button class="btn btn-sm btn-orange" onclick="doCheckSim(${i})">🔍 查原创度</button>
+          <button class="btn btn-sm btn-outline" onclick="doExportFmt(${i})">📄 排版</button>
+          <button class="btn btn-sm btn-outline" onclick="doImages(${i})">🖼 配图</button>
+          <button class="btn btn-sm btn-green" onclick="copyVersion(${i})">📋 复制</button>
+        </div>
+      </div>
+      <div class="result-content">${md2html(v.content)}</div>
+      <div style="margin-top:16px;display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" onclick="doHeadlines(${i})">📰 生成10个标题</button>
+      </div>
+    </div>`;
+}
+
+// ── 标题工厂 ──
+async function doHeadlines(vi) { showHeadlinesModal(S.article?.title||"",S.versions[vi].content); }
+async function doHeadlinesFromOriginal() { showHeadlinesModal(S.article?.title||"",S.article?.content||""); }
+async function showHeadlinesModal(title,content) {
+  const modal=document.getElementById("modal"); modal.classList.add("show");
+  document.getElementById("modalInner").innerHTML='<div class="loading-block"><div class="spinner"></div>生成标题中…</div>';
+  try {
+    const r=await fetch("/api/headlines",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title,content})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error);
+    const h=d.headlines;
+    document.getElementById("modalInner").innerHTML=`
+      <div class="card-title">📰 标题工厂 (${title||"文章"})</div>
+      ${["clickbait","seo","social"].map(cat=>`
+        <div style="margin-bottom:14px;">
+          <div class="hl-cat">${({clickbait:"🔥 点击欲型",seo:"🔍 搜索匹配型",social:"💬 社交传播型"})[cat]}</div>
+          <div class="hl-list">${(h[cat]||[]).map((t,j)=>`<div class="hl-item"><span class="hl-num">${j+1}</span><span class="hl-text">${t}</span><button class="btn btn-sm btn-outline" onclick="copyText('${t.replace(/'/g,"\\'")}')">复制</button></div>`).join("")}</div>
+        </div>`).join("")}
+      <button class="btn btn-outline" onclick="document.getElementById('modal').classList.remove('show')">关闭</button>`;
+  }catch(e){document.getElementById("modalInner").innerHTML=`<div class="error-msg">${e.message}</div>`;}
+}
+
+// ── 原创度检测 ──
+async function doCheckSim(vi) {
+  const modal=document.getElementById("modal"); modal.classList.add("show");
+  document.getElementById("modalInner").innerHTML='<div class="loading-block"><div class="spinner"></div>检测中…</div>';
+  try {
+    const r=await fetch("/api/similarity",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({original:S.article.content,rewritten:S.versions[vi].content})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error);
+    const badgeClass=d.level==="安全"?"safe":d.level==="需注意"?"warn":"danger";
+    document.getElementById("modalInner").innerHTML=`
+      <div class="card-title">🔍 原创度检测</div>
+      <div class="sim-score"><span class="sim-badge ${badgeClass}">${d.score}分 · ${d.level}</span></div>
+      <p style="text-align:center;color:var(--text-muted);margin-bottom:16px;">${d.summary||""}</p>
+      ${(d.issues||[]).map(iss=>`<div class="sim-issue"><span class="sim-tag ${iss.type}">${iss.type==="high"?"⚠️ 高相似":"⚡ 中相似"}</span><div style="margin-top:6px;"><strong>原文:</strong> ${iss.original}</div><div style="margin-top:4px;"><strong>改文:</strong> ${iss.rewritten}</div><div style="margin-top:4px;color:var(--accent2);">💡 ${iss.suggestion}</div></div>`).join("")}
+      <button class="btn btn-outline" onclick="document.getElementById('modal').classList.remove('show')" style="margin-top:12px;">关闭</button>`;
+  }catch(e){document.getElementById("modalInner").innerHTML=`<div class="error-msg">${e.message}</div>`;}
+}
+
+// ── 一键排版 ──
+let fmtCurrentTheme="clean", fmtCurrentStyle="comfortable", fmtVersionIdx=0;
+async function doExportFmt(vi) {
+  fmtVersionIdx = vi;
+  fmtCurrentTheme="clean"; fmtCurrentStyle="comfortable";
+  const modal=document.getElementById("modal"); modal.classList.add("show");
+  document.getElementById("modalInner").innerHTML='<div class="loading-block"><div class="spinner"></div>生成排版…</div>';
+  await refreshFormat();
+}
+async function refreshFormat() {
+  const modalInner = document.getElementById("modalInner");
+  const v = S.versions[fmtVersionIdx] || S.versions[S.activeVer];
+  if (!v) { modalInner.innerHTML='<div class="error-msg">没有可排版的文章</div>'; return; }
+  let d;
+  try {
+    const r=await fetch("/api/export-format",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({content:v.content,title:S.article?.title,theme:fmtCurrentTheme,style:fmtCurrentStyle})});
+    d=await r.json(); if(!r.ok) throw new Error(d.error);
+  }catch(e){ modalInner.innerHTML=`<div class="error-msg">${e.message}</div>`; return; }
+
+  const themes=d.themes||{};
+  modalInner.innerHTML=`
+    <div class="card-title">📄 公众号排版</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+      <span style="font-size:0.78rem;color:var(--text-muted);">主题：</span>
+      ${Object.entries(themes).map(([k,v])=>`<button class="btn btn-sm ${k===fmtCurrentTheme?'btn-accent':'btn-outline'}" onclick="fmtCurrentTheme='${k}';refreshFormat()">${v.name}</button>`).join("")}
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+      <span style="font-size:0.78rem;color:var(--text-muted);">间距：</span>
+      <button class="btn btn-sm ${'comfortable'===fmtCurrentStyle?'btn-accent':'btn-outline'}" onclick="fmtCurrentStyle='comfortable';refreshFormat()">舒适</button>
+      <button class="btn btn-sm ${'compact'===fmtCurrentStyle?'btn-accent':'btn-outline'}" onclick="fmtCurrentStyle='compact';refreshFormat()">紧凑</button>
+    </div>
+    <div id="fmtPreviewWrap" style="max-height:60vh;overflow-y:auto;border:1px solid var(--border);border-radius:10px;"></div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-green btn-sm" onclick="copyFmtHtml()">📋 复制HTML</button>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('modal').classList.remove('show')">关闭</button>
+    </div>`;
+
+  // 直接渲染 HTML 到 div 中，不用 iframe
+  // 来自format.js的HTML使用完整内联样式，不会被暗色主题覆盖
+  const wrap = document.getElementById('fmtPreviewWrap');
+  if (wrap) {
+    wrap.innerHTML = d.formatted;
+  }
+  window._fmtHtml = d.formatted;
+}
+function copyFmtHtml() {
+  const html = window._fmtHtml || "";
+  navigator.clipboard.writeText(html).then(()=>toast("HTML已复制，打开公众号编辑器 → 切换到源码模式 → 粘贴"));
+}
+
+// ── 多源缝合 ──
+async function doMerge() {
+  const urls=[...document.querySelectorAll(".multi-url")].map(i=>i.value.trim()).filter(Boolean);
+  if(urls.length<2) return alert("至少需要2个链接");
+  const btn=document.getElementById("mergeBtn"); btn.disabled=true; btn.innerHTML='<span class="spinner"></span>融合中…';
+  try {
+    const r=await fetch("/api/merge",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({urls,targetLength:parseInt(document.getElementById("multiTarget").value),
+        level:document.getElementById("multiLevel").value,styleId:document.getElementById("multiStyle").value})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error);
+    S.mergeContent=d.content;
+    document.getElementById("mergeResult").style.display="block";
+    document.getElementById("mergeContent").innerHTML=md2html(d.content);
+  }catch(e){alert(e.message)}
+  finally{btn.disabled=false;btn.textContent="🧩 融合生成";}
+}
+
+// ── 风格管理 ──
+function addStyleArticle(title,content) {
+  const div=document.createElement("div");
+  div.style.cssText="margin-top:8px;";
+  div.innerHTML=`
+    <input type="text" placeholder="文章标题" value="${title||""}" style="width:100%;margin-bottom:6px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;" />
+    <textarea placeholder="粘贴文章正文…" style="width:100%;min-height:120px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;resize:vertical;">${content||""}</textarea>`;
+  document.getElementById("styleArticles").appendChild(div);
+}
+async function doAnalyzeStyle() {
+  const name=document.getElementById("styleName").value.trim(); if(!name) return alert("输入风格名称");
+  const articles=[];
+  document.getElementById("styleArticles").querySelectorAll("div").forEach(div=>{
+    const inputs=div.querySelectorAll("input,textarea");
+    const title=inputs[0]?.value?.trim()||"";
+    const content=inputs[1]?.value?.trim()||"";
+    if(content) articles.push({title,content});
+  });
+  if(!articles.length) return alert("至少添加1篇文章");
+  try {
+    const r=await fetch("/api/styles/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,articles})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error);
+    toast("风格分析完成！");
+    loadStyles();
+  }catch(e){alert(e.message);}
+}
+async function loadStyles() {
+  try {
+    const r=await fetch("/api/styles"); const styles=await r.json();
+    S.styles=styles;
+    document.getElementById("styleList").innerHTML=styles.length?styles.map(s=>
+      `<div class="hist-item" style="cursor:default;">
+        <div class="hi-title">${s.name||s.id}</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;">${s.features?.personaDescription||""}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);">语调:${s.features?.tone||""} · 词汇:${s.features?.vocabulary||""} · 开头:${s.features?.openingStyle||""}</div>
+      </div>`).join(""):"<div style='color:var(--text-muted);'>暂无风格档案</div>";
+    // 更新下拉框
+    const opts=styles.map(s=>`<option value="${s.id}">${s.name||s.id}</option>`).join("");
+    document.getElementById("styleSelect").innerHTML='<option value="">默认</option>'+opts;
+    document.getElementById("multiStyle").innerHTML='<option value="">默认</option>'+opts;
+  }catch(e){}
+}
+
+// ── 历史 ──
+async function loadHistory() {
+  try {
+    const kw=document.getElementById("histSearch")?.value||"";
+    const r=await fetch("/api/history?keyword="+encodeURIComponent(kw)+"&limit=50");
+    const entries=await r.json();
+    document.getElementById("historyList").innerHTML=entries.length?entries.map(e=>`
+      <div class="hist-item" onclick="viewHistory('${e.id}')">
+        <div class="hi-title">${e.originalTitle||"无标题"}</div>
+        <div class="hi-meta"><span>${new Date(e.createdAt).toLocaleString("zh-CN")}</span><span>${e.level==="normal"?"普通人":"专业级"}·${e.versionCount}版·${e.targetLength}字</span></div>
+        ${e.tags?.length?`<div class="hist-tags">${e.tags.map(t=>`<span class="hist-tag">${t}</span>`).join("")}</div>`:""}
+      </div>`).join(""):"<div style='color:var(--text-muted);padding:20px;'>暂无记录</div>";
+  }catch(e){}
+}
+async function viewHistory(id) {
+  const modal=document.getElementById("modal"); modal.classList.add("show");
+  try {
+    const r=await fetch("/api/history/"+id); const e=await r.json();
+    document.getElementById("modalInner").innerHTML=`
+      <div class="card-title">${e.originalTitle||"无标题"}</div>
+      <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:12px;">${new Date(e.createdAt).toLocaleString("zh-CN")} · ${e.level}·${e.targetLength}字</div>
+      ${(e.versions||[]).map((v,i)=>`<div style="margin-bottom:12px;"><strong style="color:var(--accent2);">版本${v.version}</strong><div style="max-height:300px;overflow-y:auto;white-space:pre-wrap;font-size:0.85rem;line-height:1.8;color:var(--text-muted);margin-top:6px;">${v.content}</div></div>`).join("")}
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('modal').classList.remove('show')">关闭</button>`;
+  }catch(e){}
+}
+
+// ── 存档库 ──
+let archPage=1, archTotalPages=1, archFilterTag="";
+async function loadArchive(page=1) {
+  archPage=page;
+  const kw=document.getElementById("archSearch")?.value||"";
+  const level=document.getElementById("archLevel")?.value||"all";
+  const sort=document.getElementById("archSort")?.value||"newest";
+  try {
+    const params=new URLSearchParams({keyword:kw,level,sort,page:String(page),limit:"20"});
+    if(archFilterTag) params.set("tag",archFilterTag);
+    const r=await fetch("/api/archive?"+params.toString());
+    const d=await r.json();
+    archTotalPages=d.totalPages||1;
+    renderArchiveTable(d.items||[]);
+    renderArchivePager();
+    // 标签列表
+    const tagsR=await fetch("/api/archive/tags"); const tags=await tagsR.json();
+    document.getElementById("archTags").innerHTML=tags.map(t=>
+      `<button class="btn btn-sm ${t===archFilterTag?'btn-accent':'btn-outline'}" style="font-size:0.7rem;padding:4px 10px;" onclick="archFilterTag=archFilterTag==='${t}'?'':'${t}';loadArchive(1)">${t}</button>`).join("");
+  }catch(e){}
+}
+function renderArchiveTable(items) {
+  if(!items.length){ document.getElementById("archiveTable").innerHTML='<div style="text-align:center;padding:40px;color:var(--text-muted);">暂无存档，改写文章后自动入库</div>'; return; }
+  document.getElementById("archiveTable").innerHTML=`
+    <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+      <thead>
+        <tr style="border-bottom:2px solid var(--border);text-align:left;color:var(--accent2);font-size:0.75rem;">
+          <th style="padding:10px 12px;white-space:nowrap;">日期</th>
+          <th style="padding:10px 12px;">标题</th>
+          <th style="padding:10px 12px;white-space:nowrap;">来源</th>
+          <th style="padding:10px 12px;white-space:nowrap;text-align:center;">水准</th>
+          <th style="padding:10px 12px;white-space:nowrap;text-align:center;">字数</th>
+          <th style="padding:10px 12px;">标签</th>
+          <th style="padding:10px 12px;white-space:nowrap;text-align:center;">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map((e,i)=>{const n=(e.versions||[]).length;return`
+          <tr style="border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s;" onmouseenter="this.style.background='rgba(108,92,231,0.06)'" onmouseleave="this.style.background=''">
+            <td style="padding:10px 12px;color:var(--text-muted);white-space:nowrap;font-size:0.75rem;">${e.createdAt?.slice(0,10)||""}</td>
+            <td style="padding:10px 12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" onclick="viewArchive('${e.id}')" title="${e.originalTitle||""}"><span style="color:var(--text);font-weight:600;">${e.originalTitle||"无标题"}</span></td>
+            <td style="padding:10px 12px;font-size:0.72rem;color:var(--text-muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.originalUrl?`<a href="${e.originalUrl}" target="_blank" style="color:var(--accent2);" onclick="event.stopPropagation()">${new URL(e.originalUrl).hostname}</a>`:"手动输入"}</td>
+            <td style="padding:10px 12px;text-align:center;"><span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.7rem;font-weight:700;background:${e.level==='normal'?'rgba(0,184,148,0.12)':'rgba(108,92,231,0.12)'};color:${e.level==='normal'?'var(--green)':'var(--accent2)'};">${e.level==='normal'?'普通人':'专业级'}</span></td>
+            <td style="padding:10px 12px;text-align:center;color:var(--text-muted);font-size:0.75rem;">${e.targetLength||""}字<br/>${n}版</td>
+            <td style="padding:10px 12px;"><div style="display:flex;gap:3px;flex-wrap:wrap;">${(e.tags||[]).slice(0,3).map(t=>`<span style="padding:2px 6px;background:rgba(108,92,231,0.08);border-radius:3px;font-size:0.68rem;color:var(--text-muted);">${t}</span>`).join("")}${(e.tags||[]).length>3?`<span style="color:var(--text-muted);font-size:0.68rem;">+${e.tags.length-3}</span>`:""}</div></td>
+            <td style="padding:10px 12px;white-space:nowrap;text-align:center;" onclick="event.stopPropagation()">
+              <button class="btn btn-sm btn-outline" style="padding:4px 10px;font-size:0.7rem;" onclick="viewArchive('${e.id}')">查看</button>
+              <button class="btn btn-sm btn-outline" style="padding:4px 10px;font-size:0.7rem;" onclick="editArchiveTags('${e.id}')">标签</button>
+              <button class="btn btn-sm btn-outline" style="padding:4px 10px;font-size:0.7rem;color:var(--red);" onclick="deleteArchiveEntry('${e.id}')">删除</button>
+            </td>
+          </tr>`}).join("")}
+      </tbody>
+    </table>`;
+}
+function renderArchivePager() {
+  if(archTotalPages<2){ document.getElementById("archivePager").innerHTML=""; return; }
+  const pages=[];
+  for(let i=1;i<=archTotalPages;i++) pages.push(i);
+  document.getElementById("archivePager").innerHTML=`
+    <button class="btn btn-sm btn-outline" onclick="loadArchive(1)" ${archPage===1?"disabled":""}>首页</button>
+    <button class="btn btn-sm btn-outline" onclick="loadArchive(${archPage-1})" ${archPage===1?"disabled":""}>上一页</button>
+    ${pages.map(p=>`<button class="btn btn-sm ${p===archPage?'btn-accent':'btn-outline'}" onclick="loadArchive(${p})">${p}</button>`).join("")}
+    <button class="btn btn-sm btn-outline" onclick="loadArchive(${archPage+1})" ${archPage===archTotalPages?"disabled":""}>下一页</button>
+    <button class="btn btn-sm btn-outline" onclick="loadArchive(${archTotalPages})" ${archPage===archTotalPages?"disabled":""}>末页</button>
+    <span style="font-size:0.75rem;color:var(--text-muted);margin-left:8px;">共${archTotalPages}页</span>`;
+}
+async function viewArchive(id) {
+  const modal=document.getElementById("modal"); modal.classList.add("show");
+  document.getElementById("modalInner").innerHTML='<div class="loading-block"><div class="spinner"></div>加载中…</div>';
+  try {
+    const r=await fetch("/api/archive/"+id); const e=await r.json(); if(!r.ok) throw new Error(e.error);
+    document.getElementById("modalInner").innerHTML=`
+      <div class="card-title">${e.originalTitle||"无标题"}</div>
+      <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:16px;display:flex;gap:12px;flex-wrap:wrap;">
+        <span>${e.createdAt?.slice(0,10)}</span>
+        <span>${e.level==='normal'?'普通人':'专业级'} · ${e.targetLength}字 · ${(e.versions||[]).length}个版本</span>
+        ${e.originalUrl?`<a href="${e.originalUrl}" target="_blank" style="color:var(--accent2);">原文链接 →</a>`:""}
+      </div>
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:16px;">标签：${(e.tags||[]).length?(e.tags||[]).map(t=>`<span style="padding:2px 8px;background:rgba(108,92,231,0.12);border-radius:4px;margin:0 2px;">${t}</span>`).join(""):"无"}</div>
+      ${e.notes?`<div style="margin-bottom:16px;padding:12px;background:var(--bg);border-radius:8px;font-size:0.82rem;color:var(--text-muted);">📝 ${e.notes}</div>`:""}
+      ${(e.versions||[]).map((v,i)=>`
+        <div style="margin-bottom:12px;border:1px solid var(--border);border-radius:10px;padding:14px;">
+          <div style="font-weight:700;color:var(--accent2);margin-bottom:8px;">版本 ${v.version} · ${v.wordCount||0}字</div>
+          <div style="font-size:0.84rem;line-height:1.9;color:var(--text);max-height:350px;overflow-y:auto;white-space:pre-wrap;">${v.content||""}</div>
+          <button class="btn btn-sm btn-green" onclick="copyText(${JSON.stringify(v.content||"").replace(/"/g,'&quot;')})" style="margin-top:8px;">📋 复制此版本</button>
+        </div>`).join("")}
+      <div style="margin-top:12px;display:flex;gap:8px;">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('modal').classList.remove('show')">关闭</button>
+      </div>`;
+  }catch(e){document.getElementById("modalInner").innerHTML=`<div class="error-msg">${e.message}</div>`;}
+}
+async function editArchiveTags(id) {
+  try {
+    const r=await fetch("/api/archive/"+id); const e=await r.json();
+    const currentTags=(e.tags||[]).join(",");
+    const tags=prompt("编辑标签（逗号分隔）：",currentTags);
+    if(tags===null) return;
+    const newTags=tags.split(",").map(t=>t.trim()).filter(Boolean);
+    await fetch("/api/archive/"+id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({tags:newTags})});
+    loadArchive(archPage); toast("标签已更新");
+  }catch(e){alert("更新失败");}
+}
+async function deleteArchiveEntry(id) {
+  if(!confirm("确认删除此存档？")) return;
+  try {
+    await fetch("/api/archive/"+id,{method:"DELETE"});
+    loadArchive(archPage); toast("已删除");
+  }catch(e){alert("删除失败");}
+}
+function exportArchiveCsv() {
+  const kw=document.getElementById("archSearch")?.value||"";
+  const level=document.getElementById("archLevel")?.value||"all";
+  window.open("/api/archive/export?keyword="+encodeURIComponent(kw)+"&level="+level+("&tag="+encodeURIComponent(archFilterTag)),"_blank");
+}
+
+// ── 配图推荐 ──
+async function doImages(vi) {
+  const modal=document.getElementById("modal"); modal.classList.add("show");
+  document.getElementById("modalInner").innerHTML='<div class="loading-block"><div class="spinner"></div>分析文章，匹配配图…</div>';
+  try {
+    const r=await fetch("/api/images",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({title:S.article?.title||"",content:S.versions[vi].content})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error);
+    document.getElementById("modalInner").innerHTML=`
+      <div class="card-title">🖼 配图推荐</div>
+      <div style="margin-bottom:18px;">
+        <div style="font-size:0.78rem;color:var(--accent2);font-weight:700;margin-bottom:8px;">🔴 封面图 (2.35:1)</div>
+        <div style="background:var(--bg);border-radius:10px;overflow:hidden;">
+          <img src="${d.cover.imageUrl}" style="width:100%;display:block;" onerror="this.style.display='none'" />
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">${d.cover.scene} · <a href="${d.cover.sourceUrl}" target="_blank" style="color:var(--accent2);">Unsplash更多 →</a></div>
+      </div>
+      <div style="margin-bottom:18px;">
+        <div style="font-size:0.78rem;color:var(--accent2);font-weight:700;margin-bottom:8px;">📷 内文配图</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+          ${d.body.map(img=>`
+            <div style="background:var(--bg);border-radius:8px;overflow:hidden;">
+              <img src="${img.imageUrl}" style="width:100%;display:block;" onerror="this.style.display='none'" />
+              <div style="padding:4px 6px;font-size:0.68rem;color:var(--text-muted);">${img.scene}</div>
+            </div>`).join("")}
+        </div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">点击图片查看大图 · 图片来自 <a href="https://unsplash.com" target="_blank" style="color:var(--accent2);">Unsplash</a></div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('modal').classList.remove('show')">关闭</button>`;
+  }catch(e){document.getElementById("modalInner").innerHTML=`<div class="error-msg">${e.message}</div>`;}
+}
+
+// ── 工具函数 ──
+function copyVersion(i) { copyText(S.versions[i].content); }
+function copyText(text) { navigator.clipboard.writeText(text).then(()=>toast("已复制")); }
+async function doHumanize(i) {
+  const v=S.versions[i]; const btn=document.querySelectorAll("#versionDisplay button")[0]; if(btn) btn.disabled=true;
+  try {
+    const r=await fetch("/api/humanize",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:v.content})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error);
+    S.versions[i].content=d.content; renderVersion(i); toast("去AI味完成");
+  }catch(e){alert(e.message)}
+}
+function md2html(md) {
+  return md.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/^### (.+)$/gm,"<h3>$1</h3>").replace(/^## (.+)$/gm,"<h2>$1</h2>").replace(/^# (.+)$/gm,"<h1>$1</h1>")
+    .replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/\*(.+?)\*/g,"<em>$1</em>")
+    .replace(/\n\n/g,"</p><p>").replace(/^/,"<p>").replace(/$/,"</p>").replace(/<p><\/p>/g,"").replace(/<p><h/g,"<h").replace(/<\/h(\d)><\/p>/g,"</h$1>");
+}
+function hideResults(){document.getElementById("resultsArea").style.display="none";}
+function showError(m){document.getElementById("errorArea").innerHTML=`<div class="error-msg">${m}</div>`;}
+function clearError(){document.getElementById("errorArea").innerHTML="";}
+
+// ── 初始化 ──
+addStyleArticle(); addStyleArticle(); loadStyles();
+document.getElementById("modal").addEventListener("click",e=>{if(e.target===document.getElementById("modal"))e.target.classList.remove("show");});
+</script>
+</body>
+</html>
