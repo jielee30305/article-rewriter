@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: article-rewriter
+    env: node
+    region: singapore
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 3006
+    autoDeploy: true
