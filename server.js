@@ -1,4 +1,6 @@
 require("dotenv").config();
+const fs = require("fs");
+const path = require("path");
 const express = require("express");
 const { extractFromUrl } = require("./lib/extract");
 const { rewrite, humanize } = require("./lib/rewrite");
@@ -10,10 +12,19 @@ const history = require("./lib/history");
 const { recommendImages } = require("./lib/images");
 const { formatArticle, THEMES } = require("./lib/format");
 const archive = require("./lib/archive");
+const { scrapeFeeds, listFeeds } = require("./lib/rss");
+const { rewriteToutiao, generateToutiaoHeadlines, generateWeiboTou } = require("./lib/toutiao");
+const { groupByTopic, dedupRewrites } = require("./lib/dedup");
+const { rewriteHistory, generateHistoryHeadlines, checkHistoryDedup, fetchOnThisDay, fetchCategoryArticles } = require("./lib/history-rewrite");
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
 app.use(express.static("public"));
+
+// 手机连通测试页
+app.get("/test", (req, res) => {
+  res.send(`<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>连通测试</title><style>body{background:#fff;font-family:sans-serif;padding:40px 20px;text-align:center;color:#333}h1{color:#6C5CE7;font-size:2rem}p{font-size:1.2rem;margin:20px 0;color:#666}.ok{display:inline-block;padding:20px 40px;background:#00B894;color:#fff;border-radius:20px;font-size:3rem;margin:30px 0}</style></head><body><h1>连通成功 ✅</h1><div class="ok">🟢</div><p>服务器运行正常</p><p style="font-size:0.9rem;">IP: ${req.ip} · 时间: ${new Date().toLocaleString("zh-CN")}</p></body></html>`);
+});
 
 // API: 提取文章内容
 app.post("/api/extract", async (req, res) => {
@@ -333,6 +344,401 @@ app.post("/api/images", async (req, res) => {
     res.json(images);
   } catch (err) {
     console.error("配图推荐失败:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── 头条模式 ──
+
+const QUEUE_FILE = path.join(__dirname, "data", "toutiao-queue.json");
+
+function readQueue() {
+  try { return JSON.parse(fs.readFileSync(QUEUE_FILE, "utf8")); }
+  catch { return []; }
+}
+function writeQueue(items) {
+  fs.mkdirSync(path.dirname(QUEUE_FILE), { recursive: true });
+  fs.writeFileSync(QUEUE_FILE, JSON.stringify(items, null, 2), "utf8");
+}
+
+// RSS 源列表
+app.get("/api/toutiao/feeds", (req, res) => {
+  res.json(listFeeds());
+});
+
+// RSS 抓取
+app.post("/api/toutiao/scrape", async (req, res) => {
+  try {
+    const { feedIds, maxPerFeed, keywords } = req.body;
+    console.log(`头条抓取: ${feedIds?.length ? feedIds.join(",") : "全部"}, 每源${maxPerFeed || 10}条`);
+    const articles = await scrapeFeeds(feedIds, { maxItems: maxPerFeed || 10, keywords });
+    console.log(`  → 抓到 ${articles.length} 篇文章`);
+    res.json({ articles, count: articles.length });
+  } catch (err) {
+    console.error("抓取失败:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// AI 主题分组
+app.post("/api/toutiao/group", async (req, res) => {
+  try {
+    const { articles } = req.body;
+    if (!articles?.length) return res.status(400).json({ error: "请提供文章列表" });
+    console.log(`主题分组: ${articles.length} 篇文章`);
+    const groups = await groupByTopic(articles);
+    console.log(`  → ${groups.length} 个主题组`);
+    res.json({ groups });
+  } catch (err) {
+    console.error("分组失败:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 头条风格改写
+app.post("/api/toutiao/rewrite", async (req, res) => {
+  try {
+    const { url, content: manualContent, targetLength, styleId } = req.body;
+
+    let article;
+    if (manualContent?.trim()) {
+      article = {
+        title: req.body.title || "手动输入",
+        content: manualContent.trim(),
+        length: manualContent.trim().length,
+        siteName: "手动输入",
+        url: "",
+      };
+      console.log(`头条改写: 手动输入 (${article.length} 字)`);
+    } else if (url?.trim()) {
+      console.log(`头条改写: ${url}`);
+      article = await extractFromUrl(url.trim());
+      console.log(`  → ${article.title} (${article.length} 字)`);
+    } else {
+      return res.status(400).json({ error: "请提供文章链接或手动输入内容" });
+    }
+
+    let stylePrompt = "";
+    if (styleId) {
+      const style = getStyle(styleId);
+      if (style?.systemPrompt) stylePrompt = style.systemPrompt;
+    }
+
+    // 改写 + 配图 并行
+    const [versions, images] = await Promise.all([
+      rewriteToutiao(article, {
+        targetLength: targetLength || 1200,
+        stylePrompt,
+      }),
+      recommendImages(article.title, article.content).catch(e => {
+        console.log("  配图获取失败（非致命）:", e.message);
+        return null;
+      }),
+    ]);
+
+    // 自动存档
+    try {
+      archive.save({
+        originalTitle: article.title,
+        originalUrl: article.url || "",
+        originalContent: article.content,
+        versions,
+        level: "toutiao",
+        targetLength: targetLength || 1200,
+        tags: ["头条", article.siteName || ""].filter(Boolean),
+      });
+    } catch (e) { /* 静默 */ }
+
+    res.json({ original: article, versions, targetLength: targetLength || 1200, images });
+  } catch (err) {
+    console.error("头条改写失败:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 头条标题工厂
+app.post("/api/toutiao/headlines", async (req, res) => {
+  try {
+    const { title, content } = req.body;
+    if (!content?.trim()) return res.status(400).json({ error: "请提供文章内容" });
+    console.log(`头条标题工厂: ${title || "无标题"}`);
+    const headlines = await generateToutiaoHeadlines(title || "", content);
+    res.json({ headlines });
+  } catch (err) {
+    console.error("标题生成失败:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 微头条生成
+app.post("/api/toutiao/weibotou", async (req, res) => {
+  try {
+    const { title, content } = req.body;
+    if (!content?.trim()) return res.status(400).json({ error: "请提供文章内容" });
+    console.log(`微头条生成: ${title || "无标题"}`);
+    const [variants, images] = await Promise.all([
+      generateWeiboTou(title || "", content),
+      recommendImages(title || "", content).catch(e => {
+        console.log("  配图获取失败（非致命）:", e.message);
+        return null;
+      }),
+    ]);
+    res.json({ variants, images });
+  } catch (err) {
+    console.error("微头条生成失败:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 一键批量全流程
+app.post("/api/toutiao/batch", async (req, res) => {
+  try {
+    const { feedIds, maxPerFeed, targetLength } = req.body;
+    console.log("=== 头条批量流程开始 ===");
+
+    // 1. 抓取
+    const articles = await scrapeFeeds(feedIds, { maxItems: maxPerFeed || 8 });
+    console.log(`1. 抓取: ${articles.length} 篇`);
+
+    if (articles.length < 2) {
+      return res.status(400).json({ error: "抓取文章不足2篇，无法批量处理" });
+    }
+
+    // 2. 分组
+    const groups = await groupByTopic(articles);
+    console.log(`2. 分组: ${groups.length} 个主题`);
+
+    // 3. 每组改写（取每组的文章融合改写）
+    const allVersions = [];
+    for (const group of groups) {
+      if (group.articles.length === 0) continue;
+      const mergedArticle = {
+        title: group.topic,
+        content: group.articles
+          .map(a => `【${a.feedName || "来源"}】${a.title}\n${a.summary || ""}`)
+          .join("\n\n"),
+        siteName: group.articles.map(a => a.feedName).filter(Boolean).join(","),
+        url: group.articles[0]?.sourceUrl || "",
+      };
+      try {
+        const versions = await rewriteToutiao(mergedArticle, { targetLength: targetLength || 1200 });
+        allVersions.push({ topic: group.topic, sourceArticles: group.articles, versions });
+        console.log(`3. 改写 "${group.topic}": ${versions.length} 个版本`);
+      } catch (e) {
+        console.error(`改写 "${group.topic}" 失败:`, e.message);
+      }
+    }
+
+    // 4. 去重
+    const allContent = allVersions.flatMap(g =>
+      g.versions.map(v => ({ topic: g.topic, ...v }))
+    );
+    const { unique, duplicates } = await dedupRewrites(allContent);
+    console.log(`4. 去重: ${unique.length} 篇保留, ${duplicates.length} 篇重复`);
+
+    // 5. 为每篇生成微头条
+    for (const item of unique.slice(0, 5)) { // 限制数量
+      try {
+        item.weiboTou = await generateWeiboTou(item.title || item.topic, item.content);
+      } catch (e) { /* 跳过 */ }
+    }
+
+    res.json({
+      groups: allVersions.map(g => ({
+        topic: g.topic,
+        sourceCount: g.sourceArticles.length,
+        versions: g.versions,
+      })),
+      duplicatesRemoved: duplicates.length,
+      uniqueCount: unique.length,
+      totalVersions: allContent.length,
+    });
+  } catch (err) {
+    console.error("批量流程失败:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── 发布队列 CRUD ──
+
+app.get("/api/toutiao/queue", (req, res) => {
+  let items = readQueue();
+  if (req.query.status) items = items.filter(i => i.status === req.query.status);
+  res.json({ items, total: items.length });
+});
+
+app.post("/api/toutiao/queue", (req, res) => {
+  const { type, title, content, sourceUrls, tags } = req.body;
+  if (!title?.trim() || !content?.trim()) {
+    return res.status(400).json({ error: "标题和内容不能为空" });
+  }
+  const items = readQueue();
+  const entry = {
+    id: Math.random().toString(36).slice(2, 10),
+    type: type || "article",
+    title: title.trim(),
+    content: content.trim(),
+    sourceUrls: sourceUrls || [],
+    status: "draft",
+    tags: tags || [],
+    createdAt: new Date().toISOString(),
+    publishedAt: null,
+  };
+  items.unshift(entry);
+  writeQueue(items);
+  res.json(entry);
+});
+
+app.patch("/api/toutiao/queue/:id", (req, res) => {
+  const items = readQueue();
+  const idx = items.findIndex(i => i.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: "条目不存在" });
+  if (req.body.status) {
+    items[idx].status = req.body.status;
+    if (req.body.status === "published") items[idx].publishedAt = new Date().toISOString();
+  }
+  if (req.body.title) items[idx].title = req.body.title;
+  writeQueue(items);
+  res.json(items[idx]);
+});
+
+app.delete("/api/toutiao/queue/:id", (req, res) => {
+  let items = readQueue();
+  items = items.filter(i => i.id !== req.params.id);
+  writeQueue(items);
+  res.json({ ok: true });
+});
+
+// ── 历史题材 ──
+
+app.post("/api/history-topic/fetch", async (req, res) => {
+  try {
+    const { date, category } = req.body;
+
+    if (category) {
+      console.log(`历史题材-分类: ${category}`);
+      const articles = await fetchCategoryArticles(category);
+      console.log(`  → 获取 ${articles.length} 篇文章`);
+      return res.json({ source: "category", category, articles });
+    }
+
+    const today = new Date();
+    const month = date ? parseInt(date.split("-")[1]) : today.getMonth() + 1;
+    const day = date ? parseInt(date.split("-")[2]) : today.getDate();
+    console.log(`历史题材-日期: ${month}月${day}日`);
+    const events = await fetchOnThisDay(month, day);
+    console.log(`  → 获取 ${events.length} 个历史事件（已过滤）`);
+    res.json({ source: "onthisday", month, day, events });
+  } catch (err) {
+    console.error("历史题材获取失败:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/history-topic/rewrite", async (req, res) => {
+  try {
+    const { title, content, stylePrompt } = req.body;
+    if (!title?.trim() || !content?.trim()) {
+      return res.status(400).json({ error: "请提供历史事件的标题和内容" });
+    }
+
+    console.log(`历史改写: ${title}`);
+    const article = { title: title.trim(), content: content.trim() };
+
+    const [versions, images] = await Promise.all([
+      rewriteHistory(article, { targetLength: 1500, stylePrompt }),
+      recommendImages(title, content).catch(e => {
+        console.log("  配图获取失败（非致命）:", e.message);
+        return null;
+      }),
+    ]);
+
+    try {
+      archive.save({
+        originalTitle: title,
+        originalUrl: "",
+        originalContent: content,
+        versions,
+        level: "history",
+        targetLength: 1500,
+        tags: ["历史题材"],
+      });
+    } catch (e) { /* 静默 */ }
+
+    res.json({ original: article, versions, images, targetLength: 1500 });
+  } catch (err) {
+    console.error("历史改写失败:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/history-topic/merge", async (req, res) => {
+  try {
+    const { events, stylePrompt } = req.body;
+    if (!events?.length || events.length < 2) {
+      return res.status(400).json({ error: "请至少选择2个历史事件进行合并" });
+    }
+
+    const mergedTitle = events.map(e => e.title).join(" · ");
+    const mergedContent = events.map(e =>
+      `## ${e.title}\n${e.content || e.text || ""}`
+    ).join("\n\n---\n\n");
+
+    console.log(`历史合并: ${events.length} 个事件 → ${mergedTitle}`);
+
+    const article = { title: mergedTitle, content: mergedContent };
+    const [versions, images] = await Promise.all([
+      rewriteHistory(article, { targetLength: 2000, stylePrompt }),
+      recommendImages(mergedTitle, mergedContent).catch(e => {
+        console.log("  配图获取失败（非致命）:", e.message);
+        return null;
+      }),
+    ]);
+
+    try {
+      archive.save({
+        originalTitle: mergedTitle,
+        originalUrl: "",
+        originalContent: mergedContent,
+        versions,
+        level: "history",
+        targetLength: 2000,
+        tags: ["历史题材", "多事件"],
+      });
+    } catch (e) { /* 静默 */ }
+
+    res.json({ original: article, versions, images, targetLength: 2000 });
+  } catch (err) {
+    console.error("历史合并失败:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/history-topic/headlines", async (req, res) => {
+  try {
+    const { title, content } = req.body;
+    if (!content?.trim()) return res.status(400).json({ error: "请提供历史事件内容" });
+    console.log(`历史标题工厂: ${title || "无标题"}`);
+    const headlines = await generateHistoryHeadlines(title || "", content);
+    res.json({ headlines });
+  } catch (err) {
+    console.error("历史标题生成失败:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/history-topic/check-dedup", async (req, res) => {
+  try {
+    const { articles } = req.body;
+    if (!articles?.length || articles.length < 2) {
+      return res.status(400).json({ error: "请提供至少2篇文章" });
+    }
+    console.log(`历史去重: ${articles.length} 篇文章`);
+    const result = await checkHistoryDedup(articles);
+    console.log(`  → ${result.unique.length} 保留, ${result.duplicates.length} 重复`);
+    res.json(result);
+  } catch (err) {
+    console.error("历史去重失败:", err.message);
     res.status(500).json({ error: err.message });
   }
 });

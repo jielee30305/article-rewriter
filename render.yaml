@@ -9,4 +9,14 @@ services:
     envVars:
       - key: PORT
         value: 3006
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_BASE_URL
+        sync: false
+      - key: CHAT_MODEL
+        sync: false
+      - key: WIKIPEDIA_API_BASE
+        sync: false
+      - key: WIKIPEDIA_TIMEOUT
+        value: "10000"
     autoDeploy: true

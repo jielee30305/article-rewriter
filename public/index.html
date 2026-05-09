@@ -8,14 +8,14 @@
 <title>公众号文章改写工具</title>
 <style>
 :root {
-  --bg: #0d0d14; --surface: #1a1a28; --border: #2a2a3e;
-  --accent: #6C5CE7; --accent2: #a29bfe; --text: #e4e4ec; --text-muted: #8888a0;
+  --bg: #13111a; --surface: #1a1a28; --border: #2a2a3e;
+  --accent: #7B6EF0; --accent2: #b5abff; --text: #e4e4ec; --text-muted: #8888a0;
   --green: #00B894; --red: #e17055; --orange: #F39C12;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
 header { text-align:center; padding:40px 16px 24px; }
-header h1 { font-size:1.6rem; font-weight:800; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+header h1 { font-size:1.6rem; font-weight:800; color:var(--accent2); }
 .container { max-width:960px; margin:0 auto; padding:0 16px 80px; }
 
 /* 导航tabs */
@@ -163,6 +163,33 @@ header h1 { font-size:1.6rem; font-weight:800; background:linear-gradient(135deg
   /* 配图网格 */
   .modal-inner img { max-width:100%; height:auto; }
 
+  /* 头条模式 */
+  .feed-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:8px; margin-bottom:14px; }
+  .feed-check { display:flex; align-items:center; gap:8px; padding:10px 14px; background:var(--bg); border:1px solid var(--border); border-radius:10px; cursor:pointer; font-size:0.82rem; transition:all 0.2s; }
+  .feed-check:hover { border-color:var(--accent2); }
+  .feed-check.selected { border-color:var(--accent); background:rgba(108,92,231,0.08); }
+  .feed-check input { display:none; }
+  .feed-cat { font-size:0.65rem; padding:2px 6px; border-radius:3px; background:rgba(108,92,231,0.15); color:var(--accent2); }
+  .scraped-item { padding:8px 12px; border-bottom:1px solid var(--border); display:flex; gap:8px; align-items:flex-start; font-size:0.8rem; }
+  .scraped-item:last-child { border-bottom:none; }
+  .scraped-item input[type="checkbox"] { margin-top:3px; flex-shrink:0; }
+  .scraped-item .si-title { flex:1; color:var(--text); }
+  .scraped-item .si-meta { font-size:0.68rem; color:var(--text-muted); white-space:nowrap; }
+  .group-card { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:8px; }
+  .group-card .gc-topic { font-weight:700; color:var(--accent2); margin-bottom:6px; display:flex; align-items:center; gap:8px; }
+  .group-card .gc-articles { font-size:0.78rem; color:var(--text-muted); padding-left:12px; }
+  .group-card .gc-articles div { padding:2px 0; }
+  .queue-item { display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--bg); border-radius:8px; margin-bottom:6px; font-size:0.82rem; }
+  .queue-item .qi-type { padding:3px 8px; border-radius:4px; font-size:0.68rem; font-weight:700; white-space:nowrap; }
+  .qi-type.article { background:rgba(108,92,231,0.15); color:var(--accent2); }
+  .qi-type.weibotou { background:rgba(0,184,148,0.15); color:var(--green); }
+  .queue-item .qi-status { padding:3px 8px; border-radius:4px; font-size:0.68rem; font-weight:700; }
+  .qi-status.draft { background:rgba(136,136,160,0.15); color:var(--text-muted); }
+  .qi-status.ready { background:rgba(243,156,18,0.15); color:var(--orange); }
+  .qi-status.published { background:rgba(0,184,148,0.15); color:var(--green); }
+  .queue-item .qi-title { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .toutiao-version { border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:10px; }
+
   /* Toast */
   .toast { top:auto; bottom:30px; font-size:0.8rem; padding:10px 20px; }
 
@@ -185,6 +212,8 @@ header h1 { font-size:1.6rem; font-weight:800; background:linear-gradient(135deg
     <button class="nav-tab" data-tab="style" onclick="switchTab('style')">🎨 风格管理</button>
     <button class="nav-tab" data-tab="history" onclick="switchTab('history')">📚 历史记录</button>
     <button class="nav-tab" data-tab="archive" onclick="switchTab('archive')">📦 存档库</button>
+    <button class="nav-tab" data-tab="toutiao" onclick="switchTab('toutiao')">🔥 头条模式</button>
+    <button class="nav-tab" data-tab="history-topic" onclick="switchTab('history-topic')">📜 历史题材</button>
   </div>
 
   <!-- 改写文章 Tab -->
@@ -318,6 +347,107 @@ header h1 { font-size:1.6rem; font-weight:800; background:linear-gradient(135deg
     <div id="archiveTable" style="overflow-x:auto;"></div>
     <div id="archivePager" style="text-align:center;padding:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;"></div>
   </div>
+
+  <!-- 头条模式 Tab -->
+  <div id="tab-toutiao" style="display:none;">
+    <!-- 1. 内容来源 -->
+    <div class="card">
+      <div class="card-title">📡 内容来源</div>
+      <div class="feed-grid" id="feedGrid"></div>
+      <div class="options-row">
+        <label>抓取数量</label>
+        <select id="scrapeMax" style="padding:8px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.82rem;font-family:inherit;">
+          <option value="5">每源5条</option><option value="8" selected>每源8条</option><option value="10">每源10条</option><option value="15">每源15条</option>
+        </select>
+        <button class="btn btn-primary" id="scrapeBtn" onclick="doScrape()">📥 抓取文章</button>
+        <span id="scrapeTime" style="font-size:0.72rem;color:var(--text-muted);"></span>
+      </div>
+    </div>
+
+    <!-- 2. 抓取结果 -->
+    <div id="scrapeResult" style="display:none;">
+      <div class="card">
+        <div class="card-title">📋 抓取结果 <span id="scrapeCount" style="font-weight:400;color:var(--text-muted);"></span></div>
+        <div id="scrapeList" style="max-height:300px;overflow-y:auto;font-size:0.82rem;"></div>
+        <div style="margin-top:12px;display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" onclick="doDirectRewrite()">✍️ 直接改写选中</button>
+          <button class="btn btn-orange btn-sm" onclick="doGroup()">🔗 按主题分组</button>
+          <button class="btn btn-outline btn-sm" onclick="selectAllScraped()">全选/反选</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. 主题分组 -->
+    <div id="groupResult" style="display:none;">
+      <div class="card">
+        <div class="card-title">🗂 主题分组 <span id="groupCount" style="font-weight:400;color:var(--text-muted);"></span></div>
+        <div id="groupList"></div>
+        <div style="margin-top:12px;display:flex;gap:8px;">
+          <button class="btn btn-primary" id="rewriteGroupsBtn" onclick="doToutiaoRewrite()">✍️ 改写选中</button>
+          <button class="btn btn-green btn-sm" onclick="doBatch()">⚡ 一键全流程</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. 改写结果 -->
+    <div id="toutiaoResults" style="display:none;">
+      <div id="toutiaoResultsList"></div>
+    </div>
+
+    <!-- 5. 微头条弹窗 -->
+    <div id="weibotouArea" style="display:none;"></div>
+
+    <!-- 6. 发布队列 -->
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>📋 发布队列</span>
+        <button class="btn btn-outline btn-sm" onclick="loadQueue()">🔄 刷新</button>
+      </div>
+      <div id="queueTable"></div>
+    </div>
+  </div>
+
+  <!-- 历史题材 Tab -->
+  <div id="tab-history-topic" style="display:none;">
+    <!-- 1. 内容来源 -->
+    <div class="card">
+      <div class="card-title">📅 内容来源</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <input type="date" id="htDate" style="padding:10px 14px;background:var(--bg);border:2px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;" />
+        <button class="btn btn-primary" id="htFetchDateBtn" onclick="doFetchOnThisDay()">📥 历史上的今天</button>
+        <span style="color:var(--text-muted);font-size:0.78rem;">或</span>
+        <select id="htCategory" style="padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;">
+          <option value="">-- 选择古代史分类 --</option>
+          <option value="中国古代科技">中国古代科技</option>
+          <option value="世界古代史">世界古代史</option>
+          <option value="古罗马">古罗马</option>
+          <option value="古希腊">古希腊</option>
+          <option value="丝绸之路">丝绸之路</option>
+          <option value="古代文明">古代文明</option>
+        </select>
+        <button class="btn btn-primary" id="htFetchCatBtn" onclick="doFetchCategory()">📥 浏览分类</button>
+      </div>
+      <div id="htFetchTime" style="margin-top:8px;font-size:0.72rem;color:var(--text-muted);"></div>
+    </div>
+
+    <!-- 2. 历史事件列表 -->
+    <div id="htEventList" style="display:none;">
+      <div class="card">
+        <div class="card-title">📋 历史事件 <span id="htEventCount" style="font-weight:400;color:var(--text-muted);"></span></div>
+        <div id="htEvents" style="max-height:400px;overflow-y:auto;font-size:0.82rem;"></div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-primary" id="htRewriteBtn" onclick="doHistoryRewrite()">✍️ 改写选中</button>
+          <button class="btn btn-orange" id="htMergeBtn" onclick="doHistoryMerge()">🔗 合并改写选中</button>
+          <button class="btn btn-outline btn-sm" onclick="selectAllHtEvents()">全选/反选</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. 改写结果 -->
+    <div id="htResults" style="display:none;">
+      <div id="htResultsList"></div>
+    </div>
+  </div>
 </div>
 
 <!-- 弹窗 -->
@@ -333,10 +463,12 @@ function switchTab(tab) {
   S.tab = tab;
   document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
   document.querySelector(`[data-tab="${tab}"]`).classList.add("active");
-  ["rewrite","multi","style","history","archive"].forEach(t => document.getElementById(`tab-${t}`).style.display = t===tab?"block":"none");
+  ["rewrite","multi","style","history","archive","toutiao","history-topic"].forEach(t => document.getElementById(`tab-${t}`).style.display = t===tab?"block":"none");
   if (tab==="style") loadStyles();
   if (tab==="history") loadHistory();
   if (tab==="archive") loadArchive();
+  if (tab==="toutiao") { loadFeeds(); loadQueue(); }
+  if (tab==="history-topic") initHistoryTopic();
 }
 
 // ── Toast ──
@@ -783,6 +915,655 @@ function md2html(md) {
 function hideResults(){document.getElementById("resultsArea").style.display="none";}
 function showError(m){document.getElementById("errorArea").innerHTML=`<div class="error-msg">${m}</div>`;}
 function clearError(){document.getElementById("errorArea").innerHTML="";}
+
+// ── 头条模式 ──
+S.toutiao = { feeds: {}, scraped: [], groups: [], results: [], selectedGroups: new Set() };
+
+async function loadFeeds() {
+  try {
+    const r = await fetch("/api/toutiao/feeds");
+    const feeds = await r.json();
+    feeds.forEach(f => { if (!(f.id in S.toutiao.feeds)) S.toutiao.feeds[f.id] = { ...f, selected: true }; });
+    document.getElementById("feedGrid").innerHTML = feeds.map(f => `
+      <label class="feed-check ${S.toutiao.feeds[f.id]?.selected!==false?'selected':''}" onclick="toggleFeed('${f.id}')">
+        <span>${f.name}</span><span class="feed-cat">${f.category}</span>
+      </label>`).join("");
+  } catch (e) { document.getElementById("feedGrid").innerHTML = '<span style="color:var(--text-muted);">加载失败</span>'; }
+}
+
+function toggleFeed(id) {
+  S.toutiao.feeds[id].selected = !(S.toutiao.feeds[id].selected !== false);
+  document.getElementById("feedGrid").querySelectorAll(".feed-check").forEach(el => {
+    const fid = el.textContent.trim().split("\n")[0]?.trim();
+    const feed = Object.values(S.toutiao.feeds).find(f => f.name === fid);
+    if (feed) el.classList.toggle("selected", feed.selected !== false);
+  });
+}
+
+function selectedFeedIds() {
+  return Object.values(S.toutiao.feeds).filter(f => f.selected !== false).map(f => f.id);
+}
+
+async function doScrape() {
+  const feedIds = selectedFeedIds();
+  if (!feedIds.length) return alert("至少选择一个源");
+  const btn = document.getElementById("scrapeBtn");
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>抓取中…';
+  try {
+    const maxPerFeed = parseInt(document.getElementById("scrapeMax").value);
+    const r = await fetch("/api/toutiao/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feedIds, maxPerFeed }) });
+    const d = await r.json(); if (!r.ok) throw new Error(d.error);
+    S.toutiao.scraped = d.articles;
+    S.toutiao.groups = []; S.toutiao.results = [];
+    document.getElementById("scrapeResult").style.display = "block";
+    document.getElementById("scrapeCount").textContent = `共 ${d.count} 篇文章`;
+    document.getElementById("scrapeList").innerHTML = d.articles.map((a, i) => `
+      <div class="scraped-item">
+        <input type="checkbox" id="sc_${i}" checked />
+        <div class="si-title" title="${a.title}">${a.title}</div>
+        <div class="si-meta">${a.feedName||""} · ${(a.pubDate||"").slice(0,16)}</div>
+      </div>`).join("");
+    document.getElementById("groupResult").style.display = "none";
+    document.getElementById("toutiaoResults").style.display = "none";
+    document.getElementById("scrapeTime").textContent = `上次抓取: ${new Date().toLocaleTimeString("zh-CN")}`;
+    toast(`抓到 ${d.count} 篇文章`);
+  } catch (e) { alert(e.message); }
+  finally { btn.disabled = false; btn.textContent = "📥 抓取文章"; }
+}
+
+function selectAllScraped() {
+  const cbs = document.getElementById("scrapeList").querySelectorAll("input[type=checkbox]");
+  const allChecked = [...cbs].every(c => c.checked);
+  cbs.forEach(c => c.checked = !allChecked);
+}
+
+function getSelectedScraped() {
+  return S.toutiao.scraped.filter((_, i) => document.getElementById(`sc_${i}`)?.checked);
+}
+
+async function doGroup() {
+  const articles = getSelectedScraped();
+  if (articles.length < 2) return alert("至少选2篇才能分组");
+  document.getElementById("groupResult").style.display = "block";
+  document.getElementById("groupList").innerHTML = '<div class="loading-block"><div class="spinner"></div>AI 按主题分组中…（可能需要10-30秒）</div>';
+  try {
+    const r = await fetch("/api/toutiao/group", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ articles }) });
+    const text = await r.text();
+    if (!text) throw new Error("服务器返回空响应，请重试");
+    let d;
+    try { d = JSON.parse(text); } catch { throw new Error("服务器响应异常（" + text.slice(0, 100) + "）"); }
+    if (!r.ok) throw new Error(d.error || "请求失败 " + r.status);
+    S.toutiao.groups = d.groups;
+    S.toutiao.selectedGroups.clear();
+    d.groups.forEach((_, i) => S.toutiao.selectedGroups.add(i));
+    renderGroups();
+    toast(`分成 ${d.groups.length} 个主题组`);
+  } catch (e) { document.getElementById("groupList").innerHTML = `<div class="error-msg">分组失败：${e.message}<br><button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="doGroup()">🔄 重试</button></div>`; }
+}
+
+async function doDirectRewrite() {
+  const articles = getSelectedScraped();
+  if (!articles.length) return alert("至少选1篇文章");
+  document.getElementById("toutiaoResults").style.display = "block";
+  document.getElementById("toutiaoResultsList").innerHTML = '<div class="loading-block"><div class="spinner"></div>头条风格改写中…（可能需要30-60秒）</div>';
+  S.toutiao.results = [];
+  try {
+    for (const a of articles) {
+      const targetLength = a.summary?.length > 300 ? 1200 : 800;
+      const r = await fetch("/api/toutiao/rewrite", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: a.title, content: a.summary || a.title, targetLength }) });
+      const text = await r.text();
+      if (!text) throw new Error("服务器返回空响应");
+      let d;
+      try { d = JSON.parse(text); } catch { throw new Error("解析响应失败"); }
+      if (r.ok && d.versions) {
+        S.toutiao.results.push({ topic: a.title, versions: d.versions, images: d.images, sourceUrls: [a.sourceUrl||a.url].filter(Boolean), rssImages: a.images, tags: [a.feedName].filter(Boolean) });
+      }
+    }
+    document.getElementById("groupResult").style.display = "none";
+    renderToutiaoResults();
+    toast(`改写完成：${S.toutiao.results.length} 篇`);
+  } catch (e) {
+    document.getElementById("toutiaoResultsList").innerHTML = `<div class="error-msg">改写失败：${e.message}<br><button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="doDirectRewrite()">🔄 重试</button></div>`;
+  }
+}
+
+function renderGroups() {
+  document.getElementById("groupCount").textContent = `共 ${S.toutiao.groups.length} 组`;
+  document.getElementById("groupList").innerHTML = S.toutiao.groups.map((g, i) => `
+    <div class="group-card">
+      <div class="gc-topic">
+        <input type="checkbox" ${S.toutiao.selectedGroups.has(i)?'checked':''} onchange="S.toutiao.selectedGroups.${S.toutiao.selectedGroups.has(i)?'delete':'add'}(${i})" />
+        <span>${g.topic}</span>
+        <span style="font-size:0.7rem;color:var(--text-muted);">${g.articles.length}篇</span>
+      </div>
+      <div class="gc-articles">${g.articles.map(a => `<div>· ${a.title}</div>`).join("")}</div>
+    </div>`).join("");
+}
+
+async function doToutiaoRewrite() {
+  const groups = S.toutiao.groups.filter((_, i) => S.toutiao.selectedGroups.has(i));
+  if (!groups.length) return alert("至少选一组");
+  document.getElementById("toutiaoResults").style.display = "block";
+  document.getElementById("toutiaoResultsList").innerHTML = '<div class="loading-block"><div class="spinner"></div>头条风格改写中…（可能需要30-90秒）</div>';
+  S.toutiao.results = [];
+  try {
+    for (const group of groups) {
+      const merged = {
+        title: group.topic,
+        content: group.articles.map(a => `【${a.feedName}】${a.title}\n${a.summary||""}`).join("\n\n"),
+        siteName: group.articles.map(a => a.feedName).filter(Boolean).join(","),
+        url: group.articles[0]?.sourceUrl||"",
+      };
+      const targetLength = parseInt(document.getElementById("scrapeMax").value) > 5 ? 1200 : 1000;
+      const r = await fetch("/api/toutiao/rewrite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: merged.title, content: merged.content, targetLength }) });
+      const text = await r.text();
+      if (!text) throw new Error("服务器返回空响应");
+      let d;
+      try { d = JSON.parse(text); } catch { throw new Error("解析响应失败"); }
+      if (!r.ok) throw new Error(d.error || "请求失败");
+      S.toutiao.results.push({ topic: group.topic, versions: d.versions, images: d.images, sourceUrls: group.articles.map(a => a.sourceUrl).filter(Boolean), rssImages: group.articles.flatMap(a => a.images||[]).slice(0,5), tags: [group.topic] });
+    }
+    renderToutiaoResults();
+  } catch (e) { document.getElementById("toutiaoResultsList").innerHTML = `<div class="error-msg">改写失败：${e.message}<br><button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="doToutiaoRewrite()">🔄 重试</button></div>`; }
+}
+
+function renderToutiaoResults() {
+  document.getElementById("toutiaoResultsList").innerHTML = S.toutiao.results.map((res, ri) => `
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>${res.topic}</span>
+        <div style="display:flex;gap:4px;">
+          <button class="btn btn-sm btn-green" onclick="addToQueue('article','${res.topic.replace(/'/g,"\\'")}',\`${res.versions[0]?.content?.replace(/`/g,"\\`").replace(/'/g,"\\'").slice(0,200)||""}\`,${JSON.stringify(res.sourceUrls||[]).replace(/"/g,"&quot;")},${JSON.stringify(res.tags||[]).replace(/"/g,"&quot;")})">+ 队列</button>
+        </div>
+      </div>
+      ${res.images ? renderImagesBlock(res.images) : (res.rssImages?.length ? renderRssImagesBlock(res.rssImages) : "")}
+      <div class="v-tabs">${res.versions.map((v,vi)=>`<div class="v-tab ${vi===0?'active':''}" onclick="switchToutiaoVersion(${ri},${vi})">${v.label||v.version}<div class="vt-desc">${["深度","轻快","犀利"][vi]||""}</div></div>`).join("")}</div>
+      <div id="tv_${ri}" class="result-content">${md2html(res.versions[0]?.content||"")}</div>
+      <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" onclick="doToutiaoHeadlines(${ri},0)">📰 标题</button>
+        <button class="btn btn-orange btn-sm" onclick="doWeiboTouFor(${ri},0)">💬 微头条</button>
+        <button class="btn btn-sm btn-green" onclick="copyVersionToutiao(${ri},0)">📋 复制</button>
+        <button class="btn btn-sm btn-outline" onclick="addToutiaoToQueue(${ri})">📥 加入队列</button>
+      </div>
+      <div id="wt_${ri}" style="margin-top:12px;"></div>
+    </div>`).join("");
+}
+
+function renderImagesBlock(images) {
+  if (!images) return "";
+  const imgStyle = "width:100%;height:85px;object-fit:cover;display:block;";
+  return `
+    <div style="margin-bottom:14px;display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;">
+      ${images.cover ? `<a href="${images.cover.imageUrl}" target="_blank" style="flex-shrink:0;width:200px;border-radius:8px;overflow:hidden;background:var(--bg);border:1px solid var(--border);text-decoration:none;display:block;">
+        <img src="${images.cover.imageUrl}" style="${imgStyle}" onerror="this.style.opacity='0.3'" loading="lazy" />
+        <div style="padding:4px 8px;font-size:0.65rem;color:var(--text-muted);">📷 ${images.cover.scene||"封面"}</div>
+      </a>` : ""}
+      ${(images.body||[]).slice(0,3).map(img => `
+        <a href="${img.imageUrl}" target="_blank" style="flex-shrink:0;width:150px;border-radius:8px;overflow:hidden;background:var(--bg);border:1px solid var(--border);text-decoration:none;display:block;">
+          <img src="${img.imageUrl}" style="${imgStyle}" onerror="this.style.opacity='0.3'" loading="lazy" />
+          <div style="padding:4px 8px;font-size:0.65rem;color:var(--text-muted);">${img.scene||""}</div>
+        </a>`).join("")}
+    </div>`;
+}
+
+function renderRssImagesBlock(images) {
+  if (!images?.length) return "";
+  return `
+    <div style="margin-bottom:14px;display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;">
+      ${images.slice(0,3).map(url => `
+        <a href="${url}" target="_blank" style="flex-shrink:0;width:150px;border-radius:8px;overflow:hidden;background:var(--bg);border:1px solid var(--border);text-decoration:none;display:block;">
+          <img src="${url}" style="width:100%;height:85px;object-fit:cover;display:block;" onerror="this.style.opacity='0.3'" loading="lazy" />
+        </a>`).join("")}
+    </div>`;
+}
+
+function switchToutiaoVersion(ri, vi) {
+  const card = document.getElementById("toutiaoResultsList").children[ri];
+  card.querySelectorAll(".v-tab").forEach((t,i)=>{ t.classList.toggle("active",i===vi); });
+  const div = document.getElementById(`tv_${ri}`);
+  if (div) div.innerHTML = md2html(S.toutiao.results[ri].versions[vi]?.content||"");
+}
+
+function copyVersionToutiao(ri, vi) {
+  copyText(S.toutiao.results[ri].versions[vi]?.content||"");
+}
+
+async function doToutiaoHeadlines(ri, vi) {
+  const res = S.toutiao.results[ri];
+  const v = res.versions[vi];
+  const modal = document.getElementById("modal"); modal.classList.add("show");
+  document.getElementById("modalInner").innerHTML = '<div class="loading-block"><div class="spinner"></div>生成头条标题中…</div>';
+  try {
+    const r = await fetch("/api/toutiao/headlines", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: res.topic, content: v.content }) });
+    const d = await r.json(); if (!r.ok) throw new Error(d.error);
+    const h = d.headlines;
+    document.getElementById("modalInner").innerHTML = `
+      <div class="card-title">📰 头条标题 — ${res.topic}</div>
+      ${["clickbait","opinion","information"].map(cat => `
+        <div style="margin-bottom:14px;">
+          <div class="hl-cat">${{clickbait:"🔥 点击欲型",opinion:"💪 态度型",information:"📊 信息型"}[cat]}</div>
+          <div class="hl-list">${(h[cat]||[]).map((t,j)=>`<div class="hl-item"><span class="hl-num">${j+1}</span><span class="hl-text">${t}</span><button class="btn btn-sm btn-outline" onclick="copyText('${t.replace(/'/g,"\\'")}')">复制</button></div>`).join("")}</div>
+      `).join("")}
+      <button class="btn btn-outline" onclick="document.getElementById('modal').classList.remove('show')">关闭</button>`;
+  } catch (e) { document.getElementById("modalInner").innerHTML = `<div class="error-msg">${e.message}</div>`; }
+}
+
+async function doWeiboTouFor(ri, vi) {
+  const res = S.toutiao.results[ri];
+  const v = res.versions[vi];
+  const area = document.getElementById(`wt_${ri}`);
+  area.innerHTML = '<div class="loading-block"><div class="spinner"></div>生成微头条…</div>';
+  try {
+    const r = await fetch("/api/toutiao/weibotou", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: res.topic, content: v.content }) });
+    const d = await r.json(); if (!r.ok) throw new Error(d.error);
+    area.innerHTML = (d.variants||[]).map((wt, wi) => `
+      <div class="toutiao-version">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-weight:700;font-size:0.82rem;color:var(--accent2);">${wt.type}</span>
+          <span style="font-size:0.68rem;color:var(--text-muted);">${wt.charCount||""}字</span>
+        </div>
+        ${wi===0 && d.images ? renderImagesBlock(d.images) : ""}
+        <div style="font-size:0.85rem;line-height:1.8;white-space:pre-wrap;color:var(--text);margin-bottom:8px;">${wt.content}</div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-sm btn-green" onclick="copyText(${JSON.stringify(wt.content).replace(/"/g,'&quot;')})">📋 复制</button>
+          <button class="btn btn-sm btn-outline" onclick="addToQueue('weibotou','${res.topic}',${JSON.stringify(wt.content).replace(/"/g,'&quot;')},${JSON.stringify(res.sourceUrls||[]).replace(/"/g,'&quot;')},${JSON.stringify(res.tags||[]).replace(/"/g,'&quot;')})">📥 入队</button>
+        </div>
+      </div>`).join("");
+  } catch (e) { area.innerHTML = `<div class="error-msg">${e.message}</div>`; }
+}
+
+function addToutiaoToQueue(ri) {
+  const res = S.toutiao.results[ri];
+  addToQueue("article", res.topic, res.versions[0]?.content||"", res.sourceUrls||[], res.tags||[]);
+}
+
+async function addToQueue(type, title, content, sourceUrls, tags) {
+  try {
+    await fetch("/api/toutiao/queue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, title, content, sourceUrls, tags }) });
+    toast("已加入发布队列");
+    loadQueue();
+  } catch (e) { alert("加入队列失败"); }
+}
+
+async function doBatch() {
+  const feedIds = selectedFeedIds();
+  if (!feedIds.length) return alert("至少选一个源");
+  const maxPerFeed = parseInt(document.getElementById("scrapeMax").value);
+  document.getElementById("groupResult").style.display = "block";
+  document.getElementById("groupList").innerHTML = '<div class="loading-block"><div class="spinner"></div>⚡ 全自动流程：抓取→分组→改写→去重→微头条…（需1-3分钟）</div>';
+  try {
+    const r = await fetch("/api/toutiao/batch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feedIds, maxPerFeed, targetLength: 1200 }) });
+    const text = await r.text();
+    if (!text) throw new Error("服务器返回空响应");
+    let d;
+    try { d = JSON.parse(text); } catch { throw new Error("解析响应失败"); }
+    if (!r.ok) throw new Error(d.error || "请求失败");
+    S.toutiao.groups = d.groups||[];
+    S.toutiao.scraped = [];
+    S.toutiao.selectedGroups.clear();
+    S.toutiao.groups.forEach((_, i) => S.toutiao.selectedGroups.add(i));
+    S.toutiao.results = (d.groups||[]).map(g => ({
+      topic: g.topic,
+      versions: g.versions||[],
+      sourceUrls: [],
+      tags: [g.topic],
+    }));
+    document.getElementById("toutiaoResults").style.display = "block";
+    renderGroups();
+    renderToutiaoResults();
+    toast(`批量完成：${d.uniqueCount||d.totalVersions||0}篇，去重${d.duplicatesRemoved||0}篇`);
+  } catch (e) { document.getElementById("groupList").innerHTML = `<div class="error-msg">批量失败：${e.message}<br><button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="doBatch()">🔄 重试</button></div>`; }
+}
+
+async function loadQueue() {
+  try {
+    const r = await fetch("/api/toutiao/queue");
+    const d = await r.json();
+    document.getElementById("queueTable").innerHTML = d.items?.length ? d.items.map(item => `
+      <div class="queue-item">
+        <span class="qi-type ${item.type}">${item.type==="article"?"文章":"微头条"}</span>
+        <span class="qi-title" title="${item.title}">${item.title}</span>
+        <span class="qi-status ${item.status}">${{draft:"草稿",ready:"待发",published:"已发"}[item.status]||item.status}</span>
+        <span style="font-size:0.7rem;color:var(--text-muted);">${item.createdAt?.slice(0,10)}</span>
+        <button class="btn btn-sm btn-outline" style="padding:4px 8px;font-size:0.68rem;" onclick="markPublished('${item.id}')">✅</button>
+        <button class="btn btn-sm btn-outline" style="padding:4px 8px;font-size:0.68rem;color:var(--red);" onclick="removeFromQueue('${item.id}')">🗑</button>
+      </div>`).join("") : '<div style="text-align:center;padding:20px;color:var(--text-muted);">队列为空</div>';
+  } catch (e) {}
+}
+
+async function markPublished(id) {
+  try {
+    await fetch("/api/toutiao/queue/" + id, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "published" }) });
+    loadQueue(); toast("已标记为发布");
+  } catch (e) { alert("更新失败"); }
+}
+
+async function removeFromQueue(id) {
+  if (!confirm("确认删除？")) return;
+  try {
+    await fetch("/api/toutiao/queue/" + id, { method: "DELETE" });
+    loadQueue(); toast("已删除");
+  } catch (e) { alert("删除失败"); }
+}
+
+// ── 历史题材 ──
+S.historyTopic = { events: [], results: [], mode: "" };
+
+function initHistoryTopic() {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+  document.getElementById("htDate").value = `${yyyy}-${mm}-${dd}`;
+}
+
+async function doFetchOnThisDay() {
+  const dateVal = document.getElementById("htDate").value;
+  const btn = document.getElementById("htFetchDateBtn");
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>获取中…';
+  hideHtResults();
+  try {
+    const r = await fetch("/api/history-topic/fetch", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: dateVal || undefined })
+    });
+    const d = await r.json(); if (!r.ok) throw new Error(d.error);
+    S.historyTopic.events = (d.events || []).map(e => ({
+      title: e.text || e.title,
+      content: e.text || e.extract || "",
+      year: e.year,
+      pages: e.pages || [],
+      selected: true
+    }));
+    S.historyTopic.mode = "onthisday";
+    document.getElementById("htFetchTime").textContent =
+      `上次获取: ${new Date().toLocaleTimeString("zh-CN")} · ${d.month}月${d.day}日 · ${S.historyTopic.events.length} 个事件`;
+    renderHtEvents();
+    toast(`获取到 ${S.historyTopic.events.length} 个历史事件`);
+  } catch (e) { alert(e.message); }
+  finally { btn.disabled = false; btn.textContent = "📥 历史上的今天"; }
+}
+
+async function doFetchCategory() {
+  const category = document.getElementById("htCategory").value;
+  if (!category) return alert("请选择一个分类");
+  const btn = document.getElementById("htFetchCatBtn");
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>获取中…';
+  hideHtResults();
+  try {
+    const r = await fetch("/api/history-topic/fetch", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category })
+    });
+    const d = await r.json(); if (!r.ok) throw new Error(d.error);
+    S.historyTopic.events = (d.articles || []).map(a => ({
+      title: a.title,
+      content: a.extract || "",
+      year: null,
+      thumbnail: a.thumbnail,
+      pages: [],
+      selected: true
+    }));
+    S.historyTopic.mode = "category";
+    document.getElementById("htFetchTime").textContent =
+      `上次获取: ${new Date().toLocaleTimeString("zh-CN")} · 分类: ${category} · ${S.historyTopic.events.length} 篇文章`;
+    renderHtEvents();
+    toast(`获取到 ${S.historyTopic.events.length} 篇文章`);
+  } catch (e) { alert(e.message); }
+  finally { btn.disabled = false; btn.textContent = "📥 浏览分类"; }
+}
+
+function renderHtEvents() {
+  document.getElementById("htEventList").style.display = "block";
+  document.getElementById("htEventCount").textContent = `共 ${S.historyTopic.events.length} 项`;
+  document.getElementById("htEvents").innerHTML = S.historyTopic.events.map((e, i) => `
+    <div class="scraped-item" style="align-items:flex-start;">
+      <input type="checkbox" id="hte_${i}" ${e.selected ? "checked" : ""} onchange="S.historyTopic.events[${i}].selected=this.checked" />
+      <div style="flex:1;">
+        <div style="font-weight:600;margin-bottom:4px;">${e.year ? `<span style="color:var(--accent2);">${e.year}年</span> · ` : ""}${e.title}</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);line-height:1.6;">${(e.content || "").slice(0, 200)}${(e.content || "").length > 200 ? "…" : ""}</div>
+        ${e.thumbnail ? `<img src="${e.thumbnail}" style="max-width:120px;max-height:80px;border-radius:6px;margin-top:6px;display:block;" onerror="this.style.display='none'" />` : ""}
+      </div>
+    </div>`).join("");
+}
+
+function selectAllHtEvents() {
+  const allChecked = S.historyTopic.events.every(e => e.selected);
+  S.historyTopic.events.forEach(e => e.selected = !allChecked);
+  renderHtEvents();
+}
+
+function getSelectedHtEvents() {
+  return S.historyTopic.events.filter((e, i) => {
+    const cb = document.getElementById(`hte_${i}`);
+    return cb?.checked;
+  });
+}
+
+function hideHtResults() {
+  document.getElementById("htResults").style.display = "none";
+  document.getElementById("htEventList").style.display = "none";
+  S.historyTopic.results = [];
+}
+
+async function doHistoryRewrite() {
+  const events = getSelectedHtEvents();
+  if (!events.length) return alert("至少选1个事件");
+  document.getElementById("htResults").style.display = "block";
+  document.getElementById("htResultsList").innerHTML = '<div class="loading-block"><div class="spinner"></div>正在创作历史题材文章…（每个约需30-60秒）</div>';
+  S.historyTopic.results = [];
+  try {
+    for (const evt of events) {
+      const r = await fetch("/api/history-topic/rewrite", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: evt.title, content: evt.content })
+      });
+      const d = await r.json();
+      if (r.ok && d.versions) {
+        S.historyTopic.results.push({
+          topic: evt.title,
+          year: evt.year,
+          versions: d.versions,
+          images: d.images
+        });
+      }
+    }
+    renderHtResults();
+    toast(`改写完成：${S.historyTopic.results.length} 篇`);
+  } catch (e) {
+    document.getElementById("htResultsList").innerHTML = `<div class="error-msg">改写失败：${e.message}<br><button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="doHistoryRewrite()">重试</button></div>`;
+  }
+}
+
+async function doHistoryMerge() {
+  const events = getSelectedHtEvents();
+  if (events.length < 2) return alert("至少选2个事件才能合并");
+  document.getElementById("htResults").style.display = "block";
+  document.getElementById("htResultsList").innerHTML = '<div class="loading-block"><div class="spinner"></div>融合多个历史事件中…（约需40-80秒）</div>';
+  S.historyTopic.results = [];
+  try {
+    const r = await fetch("/api/history-topic/merge", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ events: events.map(e => ({ title: e.title, content: e.content })) })
+    });
+    const d = await r.json();
+    if (r.ok && d.versions) {
+      S.historyTopic.results.push({
+        topic: events.map(e => e.title).join(" · "),
+        year: null,
+        versions: d.versions,
+        images: d.images
+      });
+    }
+    renderHtResults();
+    toast("合并改写完成");
+  } catch (e) {
+    document.getElementById("htResultsList").innerHTML = `<div class="error-msg">合并失败：${e.message}<br><button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="doHistoryMerge()">重试</button></div>`;
+  }
+}
+
+function getActiveHtVi(ri) {
+  return S.historyTopic.activeVi?.[ri] ?? 0;
+}
+
+function renderHtResults() {
+  document.getElementById("htResultsList").innerHTML = S.historyTopic.results.map((res, ri) => `
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <span>${res.year ? `<span style="color:var(--accent2);">${res.year}年</span> · ` : ""}${res.topic}</span>
+      </div>
+      ${res.images ? renderImagesBlock(res.images) : ""}
+      <div class="v-tabs">${res.versions.map((v, vi) =>
+        `<div class="v-tab ${vi===0?'active':''}" onclick="switchHtVersion(${ri},${vi})">${v.label||v.version}<div class="vt-desc">${["深度叙事","轻松科普","观点史评"][vi]}</div></div>`
+      ).join("")}</div>
+      <div id="htv_${ri}" class="result-content">${md2html(res.versions[0]?.content||"")}</div>
+      <div style="margin-top:14px;display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-sm btn-accent" onclick="doExportFmtHt(${ri},getActiveHtVi(${ri}))">📄 排版导出</button>
+        <button class="btn btn-sm btn-green" onclick="copyHtVersion(${ri},getActiveHtVi(${ri}))">📋 复制</button>
+        <button class="btn btn-sm btn-outline" onclick="doImagesHt(${ri})">🖼 配图</button>
+        <button class="btn btn-sm btn-outline" onclick="doHistoryHeadlines(${ri},getActiveHtVi(${ri}))">🔥 标题</button>
+      </div>
+    </div>`).join("");
+  if (S.historyTopic.results.length >= 2) {
+    document.getElementById("htResultsList").innerHTML += `
+      <div class="card" style="border:2px dashed var(--accent2);background:var(--bg);">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-weight:600;">🔍 去重检查</span>
+          <span style="font-size:0.75rem;color:var(--text-muted);">检测 ${S.historyTopic.results.length} 篇改写之间的内容重复</span>
+          <button class="btn btn-orange btn-sm" id="htDedupBtn" onclick="doHistoryDedup()">开始检查</button>
+        </div>
+        <div id="htDedupResult" style="margin-top:10px;font-size:0.82rem;"></div>
+      </div>`;
+  }
+}
+
+function switchHtVersion(ri, vi) {
+  if (!S.historyTopic.activeVi) S.historyTopic.activeVi = {};
+  S.historyTopic.activeVi[ri] = vi;
+  const card = document.getElementById("htResultsList").children[ri];
+  card.querySelectorAll(".v-tab").forEach((t, i) => { t.classList.toggle("active", i===vi); });
+  const div = document.getElementById(`htv_${ri}`);
+  if (div) div.innerHTML = md2html(S.historyTopic.results[ri].versions[vi]?.content||"");
+}
+
+function copyHtVersion(ri, vi) {
+  copyText(S.historyTopic.results[ri].versions[vi]?.content||"");
+}
+
+async function doExportFmtHt(ri, vi) {
+  const v = S.historyTopic.results[ri].versions[vi];
+  if (!v) return;
+  S.versions = [{ version: "A", content: v.content }];
+  S.article = { title: S.historyTopic.results[ri].topic };
+  S.activeVer = 0;
+  await doExportFmt(0);
+}
+
+async function doImagesHt(ri) {
+  const res = S.historyTopic.results[ri];
+  const v = res.versions[getActiveHtVi(ri)];
+  const modal = document.getElementById("modal"); modal.classList.add("show");
+  document.getElementById("modalInner").innerHTML = '<div class="loading-block"><div class="spinner"></div>匹配历史配图…</div>';
+  try {
+    const r = await fetch("/api/images", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: res.topic, content: v.content })
+    });
+    const d = await r.json(); if (!r.ok) throw new Error(d.error);
+    document.getElementById("modalInner").innerHTML = `
+      <div class="card-title">🖼 历史题材配图 — ${res.topic}</div>
+      ${d.cover ? `
+        <div style="margin-bottom:18px;">
+          <div style="font-size:0.78rem;color:var(--accent2);font-weight:700;margin-bottom:8px;">封面图</div>
+          <div style="background:var(--bg);border-radius:10px;overflow:hidden;">
+            <img src="${d.cover.imageUrl}" style="width:100%;display:block;" onerror="this.style.display='none'" />
+          </div>
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">${d.cover.scene}</div>
+        </div>` : ""}
+      <div style="margin-bottom:18px;">
+        <div style="font-size:0.78rem;color:var(--accent2);font-weight:700;margin-bottom:8px;">内文配图</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+          ${(d.body || []).map(img => `
+            <div style="background:var(--bg);border-radius:8px;overflow:hidden;">
+              <img src="${img.imageUrl}" style="width:100%;display:block;" onerror="this.style.display='none'" />
+              <div style="padding:4px 6px;font-size:0.68rem;color:var(--text-muted);">${img.scene}</div>
+            </div>`).join("")}
+        </div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('modal').classList.remove('show')">关闭</button>`;
+  } catch (e) { document.getElementById("modalInner").innerHTML = `<div class="error-msg">${e.message}</div>`; }
+}
+
+async function doHistoryHeadlines(ri, vi) {
+  const res = S.historyTopic.results[ri];
+  const v = res.versions[vi || 0];
+  if (!v) return;
+  const modal = document.getElementById("modal"); modal.classList.add("show");
+  document.getElementById("modalInner").innerHTML = '<div class="loading-block"><div class="spinner"></div>生成三段式标题…</div>';
+  try {
+    const r = await fetch("/api/history-topic/headlines", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: res.topic, content: v.content })
+    });
+    const d = await r.json(); if (!r.ok) throw new Error(d.error);
+    const h = d.headlines || {};
+    const cats = [
+      { key: "gongzhonghao", label: "公众号长文", emoji: "📖" },
+      { key: "clickbait", label: "点击欲", emoji: "🔥" },
+      { key: "opinion", label: "态度型", emoji: "💬" },
+    ];
+    document.getElementById("modalInner").innerHTML = `
+      <div class="card-title">🔥 三段式标题 — ${res.topic}</div>
+      ${cats.map(c => `
+        <div style="margin-bottom:16px;">
+          <div style="font-size:0.78rem;color:var(--accent2);font-weight:700;margin-bottom:6px;">${c.emoji} ${c.label}</div>
+          ${(h[c.key]||[]).map((t,i) => `
+            <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:0.88rem;cursor:pointer;" onclick="copyText('${t.replace(/'/g,"\\'")}');toast('已复制')">
+              <span style="color:var(--text-muted);flex-shrink:0;">${i+1}.</span>
+              <span style="flex:1;line-height:1.5;">${t}</span>
+              <span style="color:var(--text-muted);flex-shrink:0;font-size:0.7rem;">📋</span>
+            </div>`).join("")}
+        </div>`).join("")}
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('modal').classList.remove('show')">关闭</button>`;
+  } catch (e) { document.getElementById("modalInner").innerHTML = `<div class="error-msg">${e.message}</div>`; }
+}
+
+async function doHistoryDedup() {
+  const btn = document.getElementById("htDedupBtn");
+  const resultDiv = document.getElementById("htDedupResult");
+  btn.disabled = true; btn.textContent = "检查中…";
+  resultDiv.innerHTML = '<div class="spinner" style="margin:8px auto;"></div>';
+  try {
+    const articles = S.historyTopic.results.map(r => ({
+      title: r.topic,
+      content: r.versions[0]?.content || ""
+    }));
+    const r = await fetch("/api/history-topic/check-dedup", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ articles })
+    });
+    const d = await r.json(); if (!r.ok) throw new Error(d.error);
+    if (d.duplicates?.length) {
+      resultDiv.innerHTML = `<div style="color:var(--accent2);font-weight:600;margin-bottom:8px;">⚠️ 发现 ${d.duplicates.length} 组重复</div>
+        ${d.duplicates.map(dup => `
+          <div style="background:var(--bg);padding:10px;border-radius:8px;margin-bottom:8px;border-left:3px solid var(--accent2);">
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">
+              <span style="background:var(--accent2);color:#fff;padding:2px 8px;border-radius:4px;font-size:0.68rem;">${Math.round(dup.confidence*100)}%</span>
+              <span style="font-weight:600;">${dup.article.title}</span>
+            </div>
+            <div style="font-size:0.72rem;color:var(--text-muted);">重复于: ${dup.similarTo.title} — ${dup.reason}</div>
+          </div>`).join("")}`;
+      toast(`发现 ${d.duplicates.length} 组重复`);
+    } else {
+      resultDiv.innerHTML = '<div style="color:var(--green);font-weight:600;">✅ 全部通过，未发现内容重复</div>';
+      toast("去重检查通过");
+    }
+  } catch (e) {
+    resultDiv.innerHTML = `<div class="error-msg">${e.message}</div>`;
+  }
+  finally { btn.disabled = false; btn.textContent = "开始检查"; }
+}
 
 // ── 初始化 ──
 addStyleArticle(); addStyleArticle(); loadStyles();
