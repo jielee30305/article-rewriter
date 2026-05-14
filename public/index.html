@@ -52,7 +52,7 @@ header h1 { font-size:1.6rem; font-weight:800; color:var(--accent2); }
 .btn:disabled { opacity:0.5; cursor:not-allowed; }
 
 /* 原文区 */
-.original-body { font-size:0.86rem; line-height:1.8; color:var(--text-muted); max-height:250px; overflow-y:auto; white-space:pre-wrap; padding-right:8px; }
+.original-body { font-size:0.86rem; line-height:1.8; color:var(--text-muted); max-height:500px; overflow-y:auto; white-space:pre-wrap; padding-right:8px; }
 
 /* 版本tabs */
 .v-tabs { display:flex; gap:4px; margin-bottom:16px; }
@@ -88,7 +88,10 @@ header h1 { font-size:1.6rem; font-weight:800; color:var(--accent2); }
 .sim-tag.medium { background:rgba(243,156,18,0.2); color:var(--orange); }
 
 /* 多源缝合 */
-.multi-urls { display:flex; flex-direction:column; gap:8px; }
+.multi-urls { display:flex; flex-direction:column; gap:12px; }
+.multi-item { display:flex; flex-direction:column; gap:6px; }
+.multi-title { width:100%; padding:8px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:inherit; font-size:0.9rem; }
+.multi-content { width:100%; padding:8px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:inherit; font-size:0.85rem; resize:vertical; }
 
 /* 历史 */
 .hist-item { padding:14px 18px; background:var(--bg); border-radius:10px; margin-bottom:8px; cursor:pointer; transition:all 0.2s; }
@@ -201,6 +204,16 @@ header h1 { font-size:1.6rem; font-weight:800; color:var(--accent2); }
 </style>
 </head>
 <body>
+<script>
+// 登录验证
+(async function() {
+  try {
+    const r = await fetch("/api/auth/check");
+    const d = await r.json();
+    if (!d.ok) location.replace("/login.html");
+  } catch(e) { /* 网络异常不做跳转，避免无限循环 */ }
+})();
+</script>
 
 <header><h1>公众号文章改写工具</h1></header>
 
@@ -214,6 +227,7 @@ header h1 { font-size:1.6rem; font-weight:800; color:var(--accent2); }
     <button class="nav-tab" data-tab="archive" onclick="switchTab('archive')">📦 存档库</button>
     <button class="nav-tab" data-tab="toutiao" onclick="switchTab('toutiao')">🔥 头条模式</button>
     <button class="nav-tab" data-tab="history-topic" onclick="switchTab('history-topic')">📜 历史题材</button>
+    <button class="nav-tab" data-tab="brand-story" onclick="switchTab('brand-story')">🏢 品牌故事</button>
   </div>
 
   <!-- 改写文章 Tab -->
@@ -224,15 +238,22 @@ header h1 { font-size:1.6rem; font-weight:800; color:var(--accent2); }
         <input type="text" id="urlInput" placeholder="粘贴公众号/网页文章链接…" />
         <button class="btn btn-primary" id="extractBtn" onclick="doExtract()">📥 提取原文</button>
         <button class="btn btn-outline" onclick="toggleManual()">📝 手动输入</button>
+        <button class="btn btn-outline btn-accent" onclick="toggleCompose()">🎯 命题写作</button>
       </div>
       <div id="manualArea" style="display:none; margin-top:12px;">
-        <textarea id="manualContent" placeholder="在此粘贴原文全文…" style="width:100%;min-height:200px;"></textarea>
+        <textarea id="manualContent" placeholder="在此粘贴原文全文…" style="width:100%;min-height:400px;resize:vertical;"></textarea>
         <input type="text" id="manualTitle" placeholder="文章标题（可选）" style="width:100%;margin-top:8px;" />
         <button class="btn btn-primary" onclick="useManualContent()" style="margin-top:8px;">✍️ 用此原文改写</button>
+      </div>
+      <div id="composeArea" style="display:none; margin-top:12px;">
+        <input type="text" id="composeTitle" placeholder="文章标题（如：下午四点的菜市场）" style="width:100%;padding:12px;font-size:1rem;background:var(--bg);border:2px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;" />
+        <textarea id="composePrompt" placeholder="写作要求（如：必须出现一种气味和一种声音、结尾不准点题、用画面收住…）" style="width:100%;min-height:150px;resize:vertical;margin-top:8px;"></textarea>
+        <button class="btn btn-accent" onclick="useCompose()" style="margin-top:8px;">🎯 开始命题写作</button>
       </div>
       <div class="options-row">
         <label>目标字数</label>
         <select id="targetSelect">
+          <option value="50">50字·极简</option><option value="100">100字·极简</option><option value="200">200字·微短</option><option value="500">500字·短篇</option><option value="800">800字·精炼</option>
           <option value="1000">1000字</option><option value="1200">1200字</option>
           <option value="1400" selected>1400字（推荐）</option>
           <option value="1600">1600字</option><option value="2000">2000字</option>
@@ -243,6 +264,17 @@ header h1 { font-size:1.6rem; font-weight:800; color:var(--accent2); }
         </select>
         <label style="margin-left:8px;">风格</label>
         <select id="styleSelect"><option value="">默认</option></select>
+        <label style="margin-left:8px;">文风</label>
+        <select id="masterSelect"><option value="">默认</option></select>
+      </div>
+      <div class="options-row" style="margin-top:4px;">
+        <label>表达强度 <span id="rwIntensityLabel" style="font-weight:600;color:var(--accent);">7·有态度不直说</span></label>
+        <input type="range" id="rwIntensity" min="1" max="10" value="7" step="1" oninput="onRwIntensityChange()" style="width:100%;accent-color:var(--accent);" />
+        <div style="display:flex;justify-content:space-between;font-size:0.65rem;color:var(--text-muted);margin-top:2px;"><span>1·火力全开</span><span>10·纯文学</span></div>
+      </div>
+      <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="rwFreeMode" style="accent-color:var(--accent);width:16px;height:16px;" />
+        <label for="rwFreeMode" style="font-size:0.8rem;color:var(--text);cursor:pointer;">独立创作 — 只取观点，不跟原文情节走</label>
       </div>
     </div>
 
@@ -270,15 +302,25 @@ header h1 { font-size:1.6rem; font-weight:800; color:var(--accent2); }
   <!-- 多源缝合 Tab -->
   <div id="tab-multi" style="display:none;">
     <div class="card">
-      <div class="card-title">粘贴2-3篇同主题文章链接，融合成一篇</div>
-      <div class="multi-urls" id="multiUrls">
-        <input type="text" placeholder="文章链接 1" class="multi-url" />
-        <input type="text" placeholder="文章链接 2" class="multi-url" />
-        <input type="text" placeholder="文章链接 3（可选）" class="multi-url" />
+      <div class="card-title">粘贴2-3篇同主题文章，融合成一篇</div>
+      <div class="multi-urls" id="multiTexts">
+        <div class="multi-item">
+          <input type="text" placeholder="文章1 标题" class="multi-title" />
+          <textarea placeholder="粘贴文章1正文…" class="multi-content" rows="6"></textarea>
+        </div>
+        <div class="multi-item">
+          <input type="text" placeholder="文章2 标题" class="multi-title" />
+          <textarea placeholder="粘贴文章2正文…" class="multi-content" rows="6"></textarea>
+        </div>
+        <div class="multi-item">
+          <input type="text" placeholder="文章3 标题（可选）" class="multi-title" />
+          <textarea placeholder="粘贴文章3正文…（可选）" class="multi-content" rows="6"></textarea>
+        </div>
       </div>
       <div class="options-row">
         <label>目标字数</label>
         <select id="multiTarget">
+          <option value="50">50字·极简</option><option value="100">100字·极简</option><option value="200">200字·微短</option><option value="500">500字·短篇</option><option value="800">800字·精炼</option>
           <option value="1200">1200字</option><option value="1500" selected>1500字</option>
           <option value="1800">1800字</option><option value="2000">2000字</option>
         </select>
@@ -416,16 +458,15 @@ header h1 { font-size:1.6rem; font-weight:800; color:var(--accent2); }
         <input type="date" id="htDate" style="padding:10px 14px;background:var(--bg);border:2px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;" />
         <button class="btn btn-primary" id="htFetchDateBtn" onclick="doFetchOnThisDay()">📥 历史上的今天</button>
         <span style="color:var(--text-muted);font-size:0.78rem;">或</span>
-        <select id="htCategory" style="padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;">
-          <option value="">-- 选择古代史分类 --</option>
-          <option value="中国古代科技">中国古代科技</option>
-          <option value="世界古代史">世界古代史</option>
-          <option value="古罗马">古罗马</option>
-          <option value="古希腊">古希腊</option>
-          <option value="丝绸之路">丝绸之路</option>
-          <option value="古代文明">古代文明</option>
+        <select id="htFigureType" style="padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;">
+          <option value="">-- 选择人物类型 --</option>
+          <option value="被影视黑了的">🎬 被影视黑了的</option>
+          <option value="被影视神化了的">✨ 被影视神化了的</option>
+          <option value="正野评价两极">⚡ 正野评价两极</option>
+          <option value="野史比正史精彩">📖 野史比正史精彩</option>
+          <option value="被遗忘的牛人">💎 被遗忘的牛人</option>
         </select>
-        <button class="btn btn-primary" id="htFetchCatBtn" onclick="doFetchCategory()">📥 浏览分类</button>
+        <button class="btn btn-primary" id="htFetchFigBtn" onclick="doFetchFigures()">📥 浏览人物</button>
       </div>
       <div id="htFetchTime" style="margin-top:8px;font-size:0.72rem;color:var(--text-muted);"></div>
     </div>
@@ -448,6 +489,77 @@ header h1 { font-size:1.6rem; font-weight:800; color:var(--accent2); }
       <div id="htResultsList"></div>
     </div>
   </div>
+  <!-- 品牌故事 Tab -->
+  <div id="tab-brand-story" style="display:none;">
+    <div class="card">
+      <div class="card-title">题目 + 短句简介</div>
+      <div style="font-size:0.72rem;color:var(--orange);margin-bottom:14px;padding:6px 10px;background:rgba(243,156,18,0.06);border-radius:6px;" id="bsTip">100-150字。三句话：① 这个人什么性格 ② 他最看不惯这行什么 ③ 他给客人什么别人给不了的。品牌立场比细节重要——AI需要的是一个立场，不是一份简历。</div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.75rem;color:var(--text-muted);display:block;margin-bottom:4px;">品牌/题目</label>
+        <input type="text" id="bsTitle" placeholder="如：拾点面包·老周" style="width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:0.85rem;" />
+      </div>
+      <div>
+        <label style="font-size:0.75rem;color:var(--text-muted);display:block;margin-bottom:4px;">短句简介</label>
+        <textarea id="bsBrief" placeholder="如：老周，拾点面包。较真，死磕细节，眼里揉不得沙子。犯错必罚，不容偷懒。用真心换信任，不计成本送面包给工人。做活的真面包。想让人摸到面团呼吸。" style="width:100%;min-height:160px;resize:vertical;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:0.85rem;padding:10px 12px;line-height:1.8;"></textarea>
+      </div>
+      <div class="options-row" style="margin-top:14px;">
+        <label>品牌模式</label>
+        <select id="bsMode" onchange="onBsModeChange()">
+          <option value="character" selected>👤 人物纪实体 — 老板/创始人故事</option>
+          <option value="belief">🧬 信念体 — 品牌信念/价值观故事</option>
+        </select>
+        <label>目标字数</label>
+        <select id="bsTargetLength">
+          <option value="50">50字·极简</option><option value="100">100字·极简</option><option value="200">200字·微短</option><option value="300">300字·名片式</option>
+          <option value="500">500字·短故事</option>
+          <option value="800">800字·品牌志</option>
+          <option value="500" selected>500字·短故事</option>
+          <option value="1200">1200字·深度品牌</option>
+          <option value="1400">1400字·扩充品牌</option>
+          <option value="1600">1600字·详尽专访体</option>
+          <option value="2000">2000字·深度专访</option>
+          <option value="2500">2500字·长文品牌故事</option>
+          <option value="3000">3000字·长篇叙事</option>
+        </select>
+        <label>表达强度 <span id="bsIntensityLabel" style="font-weight:600;color:var(--accent);">7·有态度不直说</span></label>
+        <input type="range" id="bsIntensity" min="1" max="10" value="7" step="1" oninput="onBsIntensityChange()" style="width:100%;accent-color:var(--accent);" />
+        <div style="display:flex;justify-content:space-between;font-size:0.65rem;color:var(--text-muted);margin-top:2px;"><span>1·火力全开</span><span>10·纯文学</span></div>
+        <label>写作手法</label>
+        <select id="bsMethod">
+          <option value="gossage" selected>💬 对话体 — 口语化，像偷听来的</option>
+          <option value="maki">⌫ 短句体 — 一句一行，极度压缩</option>
+          <option value="burnett">🧱 内在戏剧性 — 从物件/空间挖故事</option>
+          <option value="bernbach">⚡ 悖论法 — 抓住核心矛盾展开</option>
+          <option value="ogilvy">📊 事实密集型 — 数字/时间/人名可查证 ⚠高素材门槛</option>
+        </select>
+      </div>
+      <button class="btn btn-accent" id="bsGenerateBtn" onclick="doBrandStoryGenerate()" style="margin-top:14px;font-size:0.95rem;padding:14px 28px;">🏢 生成品牌故事</button>
+    </div>
+
+    <div id="bsLoading" style="display:none;text-align:center;padding:40px;">
+      <div class="spinner"></div>
+      <div style="color:var(--text-muted);margin-top:12px;">AI 正在创作品牌故事…（约15-45秒）</div>
+    </div>
+
+    <div id="bsResult" style="display:none;">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+          <div class="card-title" style="margin-bottom:0;">品牌故事</div>
+          <div style="font-size:0.78rem;color:var(--text-muted);" id="bsWordCount"></div>
+        </div>
+        <div class="result-content" id="bsContent"></div>
+        <div id="bsBannedWarn" style="display:none;margin-top:12px;padding:10px 14px;background:rgba(243,156,18,0.12);border:1px solid var(--orange);border-radius:8px;font-size:0.78rem;color:var(--orange);"></div>
+        <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-sm btn-green" onclick="copyText(document.getElementById('bsContent').textContent)">📋 复制全文</button>
+          <button class="btn btn-sm btn-accent" onclick="doBrandStoryTitle()">📰 生成标题</button>
+          <button class="btn btn-sm btn-outline" onclick="doExportFmtBrandStory()">📄 排版导出</button>
+          <button class="btn btn-sm btn-outline" onclick="doHumanizeBrandStory()">🧹 去AI味微调</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="bsError" style="display:none;"></div>
+  </div>
 </div>
 
 <!-- 弹窗 -->
@@ -463,24 +575,34 @@ function switchTab(tab) {
   S.tab = tab;
   document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
   document.querySelector(`[data-tab="${tab}"]`).classList.add("active");
-  ["rewrite","multi","style","history","archive","toutiao","history-topic"].forEach(t => document.getElementById(`tab-${t}`).style.display = t===tab?"block":"none");
+  ["rewrite","multi","style","history","archive","toutiao","history-topic","brand-story"].forEach(t => document.getElementById(`tab-${t}`).style.display = t===tab?"block":"none");
   if (tab==="style") loadStyles();
   if (tab==="history") loadHistory();
   if (tab==="archive") loadArchive();
   if (tab==="toutiao") { loadFeeds(); loadQueue(); }
   if (tab==="history-topic") initHistoryTopic();
+  if (tab==="brand-story") initBrandStory();
 }
 
 // ── Toast ──
 function toast(msg) { const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2000); }
 
 // ── 手动输入 ──
-function toggleManual() { const a=document.getElementById("manualArea"); a.style.display=a.style.display==="none"?"block":"none"; }
+function toggleManual() { const a=document.getElementById("manualArea"); a.style.display=a.style.display==="none"?"block":"none"; document.getElementById("composeArea").style.display="none"; }
+function toggleCompose() { const a=document.getElementById("composeArea"); a.style.display=a.style.display==="none"?"block":"none"; document.getElementById("manualArea").style.display="none"; }
 function useManualContent() {
   const content=document.getElementById("manualContent").value.trim();
   if(!content) return alert("请粘贴原文");
   S.article={ title:document.getElementById("manualTitle").value.trim()||"手动输入", content, length:content.length, url:"", siteName:"手动输入" };
   S.versions=[]; showOriginal();
+}
+function useCompose() {
+  const title=document.getElementById("composeTitle").value.trim();
+  const prompt=document.getElementById("composePrompt").value.trim();
+  if(!title) return alert("请填写文章标题");
+  S.article={ title, content:prompt||"请自由发挥", length:0, url:"", siteName:"命题写作", mode:"compose" };
+  S.versions=[];
+  doRewrite();
 }
 
 // ── 提取 ──
@@ -490,7 +612,12 @@ async function doExtract() {
   hideResults(); clearError();
   try {
     const r=await fetch("/api/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url})});
-    const d=await r.json(); if(!r.ok) throw new Error(d.error);
+    const d=await r.json();
+    if(!r.ok) {
+      let extra="";
+      if(d.needClientFetch) extra="\n（微信文章需先在微信中打开，复制全文后点「手动输入」粘贴）";
+      throw new Error(d.error+extra);
+    }
     S.article=d; S.versions=[]; showOriginal();
   }catch(e){showError(e.message)}finally{btn.disabled=false;btn.textContent="📥 提取原文";}
 }
@@ -499,7 +626,20 @@ function showOriginal() {
   document.getElementById("originalCard").style.display="block";
   document.getElementById("origTitle").textContent=S.article.title;
   document.getElementById("origMeta").textContent=S.article.length+"字 · "+(S.article.siteName||"");
-  document.getElementById("origBody").textContent=S.article.content.slice(0,2000)+(S.article.length>2000?"\n\n…（预览截断）":"");
+  document.getElementById("origBody").textContent=S.article.content.slice(0,8000)+(S.article.length>8000?"\n\n…（预览截断）":"");
+}
+
+const INTENSITY_LABELS = {10:'10·纯文学',9:'9·很克制',8:'8·克制为主',7:'7·有态度不直说',6:'6·偶尔靠近',5:'5·该说就说',4:'4·直言',3:'3·犀利',2:'2·攻击',1:'1·火力全开'};
+
+function onRwIntensityChange() {
+  const v = document.getElementById("rwIntensity").value;
+  const el = document.getElementById("rwIntensityLabel");
+  if (el) el.textContent = INTENSITY_LABELS[v] || (v + '·自定义');
+}
+function onMultiIntensityChange() {
+  const v = document.getElementById("multiIntensity").value;
+  const el = document.getElementById("multiIntensityLabel");
+  if (el) el.textContent = INTENSITY_LABELS[v] || (v + '·自定义');
 }
 
 // ── 改写 ──
@@ -508,13 +648,18 @@ async function doRewrite() {
   const targetLength=parseInt(document.getElementById("targetSelect").value);
   const level=document.getElementById("levelSelect").value;
   const styleId=document.getElementById("styleSelect").value;
+  const master=document.getElementById("masterSelect").value;
+  const intensity=parseInt(document.getElementById("rwIntensity").value);
+  const freeMode=document.getElementById("rwFreeMode").checked;
   const btn=document.getElementById("rewriteBtn"); btn.disabled=true; btn.innerHTML='<span class="spinner"></span>改写中…';
   document.getElementById("loadingArea").innerHTML='<div class="loading-block"><div class="spinner"></div> AI正在深度改写…</div>';
   clearError();
   try {
-    const body={url:S.article.url||"",targetLength,level};
+    const body={url:S.article.url||"",targetLength,level,intensity,freeMode};
     if(styleId) body.styleId=styleId;
-    // 手动输入模式：直接传content
+    if(master) body.master=master;
+    if(S.article.mode==="compose") body.mode="compose";
+    // 手动输入/命题写作模式：直接传content
     if(!body.url && S.article.content) body.content=S.article.content;
     const r=await fetch("/api/rewrite",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     const d=await r.json(); if(!r.ok) throw new Error(d.error);
@@ -537,32 +682,35 @@ function showResults() {
 }
 function renderVersionTabs() {
   const labels=getLabels();
-  document.getElementById("versionTabs").innerHTML=S.versions.map((v,i)=>
-    `<div class="v-tab ${i===S.activeVer?'active':''}" onclick="switchVersion(${i})">${labels[v.version].label}<div class="vt-desc">${labels[v.version].desc}</div></div>`).join("");
+  document.getElementById("versionTabs").innerHTML=S.versions.map((v,i)=>{
+    const info=labels[v.version]||{label:v.version,desc:""};
+    return `<div class="v-tab ${i===S.activeVer?'active':''}" onclick="switchVersion(${i})">${info.label}<div class="vt-desc">${info.desc}</div></div>`;
+  }).join("");
 }
 function switchVersion(i){ S.activeVer=i; renderVersionTabs(); renderVersion(i); }
 function getLabels() {
   const level=document.getElementById("levelSelect").value||"pro";
   const labels={
-    pro:{A:{label:"A·深度长文",desc:"专栏质感"},B:{label:"B·轻松聊天",desc:"手机友好"},C:{label:"C·观点犀利",desc:"有棱角"}},
-    normal:{A:{label:"A·认真分享",desc:"仔细但朴实"},B:{label:"B·随性唠嗑",desc:"想到哪说哪"},C:{label:"C·老实碎碎念",desc:"啰嗦但真诚"}},
+    pro:{"深度长文":{label:"深度长文",desc:"专栏质感"},"路人视角":{label:"路人视角",desc:"真实感受"},"独立评论":{label:"独立评论",desc:"一针见血"}},
+    normal:{"认真分享":{label:"认真分享",desc:"仔细但朴实"},"随性聊天":{label:"随性聊天",desc:"想到哪说哪"},"碎碎念":{label:"碎碎念",desc:"啰嗦但真诚"}},
   };
   return labels[level]||labels.pro;
 }
 function renderVersion(i) {
   const v=S.versions[i]; if(!v) return;
   const labels=getLabels();
+  const info=labels[v.version]||{label:v.version,desc:""};
   const wc=v.content.replace(/[#*\-\s\n`>|]/g,"").length;
   document.getElementById("versionDisplay").innerHTML=`
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
-        <span style="font-size:0.8rem;color:var(--text-muted);">${labels[v.version].label} · 约${wc}字</span>
+        <span style="font-size:0.8rem;color:var(--text-muted);">${info.label} · 约${wc}字</span>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="btn btn-sm btn-accent" onclick="doHumanize(${i})">🧹 去AI味</button>
           <button class="btn btn-sm btn-orange" onclick="doCheckSim(${i})">🔍 查原创度</button>
           <button class="btn btn-sm btn-outline" onclick="doExportFmt(${i})">📄 排版</button>
           <button class="btn btn-sm btn-outline" onclick="doImages(${i})">🖼 配图</button>
-          <button class="btn btn-sm btn-green" onclick="copyVersion(${i})">📋 复制</button>
+          <button class="btn btn-sm btn-green" onclick="copyVersion()">📋 复制</button>
         </div>
       </div>
       <div class="result-content">${md2html(v.content)}</div>
@@ -587,7 +735,7 @@ async function showHeadlinesModal(title,content) {
       ${["clickbait","seo","social"].map(cat=>`
         <div style="margin-bottom:14px;">
           <div class="hl-cat">${({clickbait:"🔥 点击欲型",seo:"🔍 搜索匹配型",social:"💬 社交传播型"})[cat]}</div>
-          <div class="hl-list">${(h[cat]||[]).map((t,j)=>`<div class="hl-item"><span class="hl-num">${j+1}</span><span class="hl-text">${t}</span><button class="btn btn-sm btn-outline" onclick="copyText('${t.replace(/'/g,"\\'")}')">复制</button></div>`).join("")}</div>
+          <div class="hl-list">${(h[cat]||[]).map((t,j)=>`<div class="hl-item"><span class="hl-num">${j+1}</span><span class="hl-text">${t}</span><button class="btn btn-sm btn-outline" onclick="copyText(${JSON.stringify(t)})">复制</button></div>`).join("")}</div>
         </div>`).join("")}
       <button class="btn btn-outline" onclick="document.getElementById('modal').classList.remove('show')">关闭</button>`;
   }catch(e){document.getElementById("modalInner").innerHTML=`<div class="error-msg">${e.message}</div>`;}
@@ -664,12 +812,16 @@ function copyFmtHtml() {
 
 // ── 多源缝合 ──
 async function doMerge() {
-  const urls=[...document.querySelectorAll(".multi-url")].map(i=>i.value.trim()).filter(Boolean);
-  if(urls.length<2) return alert("至少需要2个链接");
+  const items=[...document.querySelectorAll("#multiTexts .multi-item")].map(item=>{
+    const title=item.querySelector(".multi-title").value.trim();
+    const content=item.querySelector(".multi-content").value.trim();
+    return title&&content?{title,content}:null;
+  }).filter(Boolean);
+  if(items.length<2) return alert("至少需要2篇文章（标题+正文都填）");
   const btn=document.getElementById("mergeBtn"); btn.disabled=true; btn.innerHTML='<span class="spinner"></span>融合中…';
   try {
     const r=await fetch("/api/merge",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({urls,targetLength:parseInt(document.getElementById("multiTarget").value),
+      body:JSON.stringify({texts:items,targetLength:parseInt(document.getElementById("multiTarget").value),
         level:document.getElementById("multiLevel").value,styleId:document.getElementById("multiStyle").value})});
     const d=await r.json(); if(!r.ok) throw new Error(d.error);
     S.mergeContent=d.content;
@@ -721,6 +873,13 @@ async function loadStyles() {
     document.getElementById("multiStyle").innerHTML='<option value="">默认</option>'+opts;
   }catch(e){}
 }
+async function loadMasters() {
+  try {
+    const r=await fetch("/api/masters"); const masters=await r.json();
+    const opts=masters.map(m=>`<option value="${m.id}">${m.avatar} ${m.name} · ${m.desc}</option>`).join("");
+    document.getElementById("masterSelect").innerHTML='<option value="">默认（无特定文风）</option>'+opts;
+  }catch(e){}
+}
 
 // ── 历史 ──
 async function loadHistory() {
@@ -743,7 +902,7 @@ async function viewHistory(id) {
     document.getElementById("modalInner").innerHTML=`
       <div class="card-title">${e.originalTitle||"无标题"}</div>
       <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:12px;">${new Date(e.createdAt).toLocaleString("zh-CN")} · ${e.level}·${e.targetLength}字</div>
-      ${(e.versions||[]).map((v,i)=>`<div style="margin-bottom:12px;"><strong style="color:var(--accent2);">版本${v.version}</strong><div style="max-height:300px;overflow-y:auto;white-space:pre-wrap;font-size:0.85rem;line-height:1.8;color:var(--text-muted);margin-top:6px;">${v.content}</div></div>`).join("")}
+      ${(e.versions||[]).map((v,i)=>`<div style="margin-bottom:12px;"><strong style="color:var(--accent2);">${v.version}</strong><div style="max-height:300px;overflow-y:auto;white-space:pre-wrap;font-size:0.85rem;line-height:1.8;color:var(--text-muted);margin-top:6px;">${v.content}</div></div>`).join("")}
       <button class="btn btn-outline btn-sm" onclick="document.getElementById('modal').classList.remove('show')">关闭</button>`;
   }catch(e){}
 }
@@ -830,7 +989,7 @@ async function viewArchive(id) {
       ${e.notes?`<div style="margin-bottom:16px;padding:12px;background:var(--bg);border-radius:8px;font-size:0.82rem;color:var(--text-muted);">📝 ${e.notes}</div>`:""}
       ${(e.versions||[]).map((v,i)=>`
         <div style="margin-bottom:12px;border:1px solid var(--border);border-radius:10px;padding:14px;">
-          <div style="font-weight:700;color:var(--accent2);margin-bottom:8px;">版本 ${v.version} · ${v.wordCount||0}字</div>
+          <div style="font-weight:700;color:var(--accent2);margin-bottom:8px;">${v.version} · ${v.wordCount||0}字</div>
           <div style="font-size:0.84rem;line-height:1.9;color:var(--text);max-height:350px;overflow-y:auto;white-space:pre-wrap;">${v.content||""}</div>
           <button class="btn btn-sm btn-green" onclick="copyText(${JSON.stringify(v.content||"").replace(/"/g,'&quot;')})" style="margin-top:8px;">📋 复制此版本</button>
         </div>`).join("")}
@@ -896,7 +1055,7 @@ async function doImages(vi) {
 }
 
 // ── 工具函数 ──
-function copyVersion(i) { copyText(S.versions[i].content); }
+function copyVersion() { copyText(S.versions[S.activeVer].content); }
 function copyText(text) { navigator.clipboard.writeText(text).then(()=>toast("已复制")); }
 async function doHumanize(i) {
   const v=S.versions[i]; const btn=document.querySelectorAll("#versionDisplay button")[0]; if(btn) btn.disabled=true;
@@ -915,6 +1074,177 @@ function md2html(md) {
 function hideResults(){document.getElementById("resultsArea").style.display="none";}
 function showError(m){document.getElementById("errorArea").innerHTML=`<div class="error-msg">${m}</div>`;}
 function clearError(){document.getElementById("errorArea").innerHTML="";}
+
+// ── 品牌故事 ──
+S.brandStory = { content: "", input: {} };
+
+function initBrandStory() {
+  onBsModeChange();
+  onBsIntensityChange();
+}
+
+const BS_INTENSITY_LABELS = {
+  10: '10·纯文学', 9: '9·微有态度', 8: '8·克制选择', 7: '7·有态度不直说', 6: '6·偶尔靠近', 5: '5·该说就说', 4: '4·直言有力', 3: '3·直接点名', 2: '2·一句扎穿', 1: '1·火力全开'
+};
+
+function onBsIntensityChange() {
+  const v = document.getElementById("bsIntensity").value;
+  document.getElementById("bsIntensityLabel").textContent = BS_INTENSITY_LABELS[v] || (v + '·自定义');
+}
+
+function onBsModeChange() {
+  const mode = document.getElementById("bsMode").value;
+  const tip = document.getElementById("bsTip");
+  const brief = document.getElementById("bsBrief");
+  if (mode === "belief") {
+    tip.innerHTML = '100-150字。三句话：① 这个品牌相信什么 ② 它反对行业里什么做法 ③ 它给世界什么别人给不了的。信念是主角——<b>不写创始人传记</b>，选一个核心物件贯穿全文。';
+    brief.placeholder = '如：拾点面包相信面包应该是活的。不做能放半个月的"标本"，只用自养酵母。那桶鲁邦种养了三年，每个面团过秤，不卖隔夜面包。傍晚把没卖完的切好，送给工地的工人和环卫站。';
+  } else {
+    tip.innerHTML = '100-150字。三句话：① 这个人什么性格 ② 他最看不惯这行什么 ③ 他给客人什么别人给不了的。品牌立场比细节重要——AI需要的是一个立场，不是一份简历。';
+    brief.placeholder = '如：老周，拾点面包。较真，死磕细节，眼里揉不得沙子。犯错必罚，不容偷懒。用真心换信任，不计成本送面包给工人。做活的真面包。想让人摸到面团呼吸。';
+  }
+}
+
+async function doBrandStoryGenerate() {
+  const btn = document.getElementById("bsGenerateBtn");
+  const input = {
+    title: document.getElementById("bsTitle").value.trim(),
+    brief: document.getElementById("bsBrief").value.trim(),
+    intensity: parseInt(document.getElementById("bsIntensity").value),
+    targetLength: parseInt(document.getElementById("bsTargetLength").value),
+    method: document.getElementById("bsMethod").value,
+    mode: document.getElementById("bsMode").value,
+  };
+
+  if (!input.brief.trim()) {
+    return alert("请填写短句简介");
+  }
+
+  S.brandStory.input = input;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>生成中…';
+  document.getElementById("bsLoading").style.display = "block";
+  document.getElementById("bsResult").style.display = "none";
+  document.getElementById("bsError").style.display = "none";
+
+  try {
+    const r = await fetch("/api/brand-story/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+
+    S.brandStory.content = d.content;
+    document.getElementById("bsLoading").style.display = "none";
+    document.getElementById("bsResult").style.display = "block";
+    document.getElementById("bsContent").innerHTML = md2html(d.content);
+    document.getElementById("bsWordCount").textContent = "约" + d.wordCount + "字";
+
+    // 禁词警告
+    if (d.bannedWordsFound && d.bannedWordsFound.length > 0) {
+      document.getElementById("bsBannedWarn").style.display = "block";
+      document.getElementById("bsBannedWarn").textContent = "⚠ 检测到软文禁词：" + d.bannedWordsFound.join("、") + "。建议手动检查替换。";
+    } else {
+      document.getElementById("bsBannedWarn").style.display = "none";
+    }
+
+    toast("品牌故事生成完成");
+  } catch (e) {
+    document.getElementById("bsLoading").style.display = "none";
+    document.getElementById("bsError").style.display = "block";
+    document.getElementById("bsError").innerHTML = '<div class="error-msg">' + e.message + '</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🏢 生成品牌故事";
+  }
+}
+
+async function doBrandStoryTitle() {
+  if (!S.brandStory.content) return alert("请先生成品牌故事");
+  const modal = document.getElementById("modal");
+  modal.classList.add("show");
+  document.getElementById("modalInner").innerHTML = '<div class="loading-block"><div class="spinner"></div>生成标题中…</div>';
+  try {
+    const r = await fetch("/api/brand-story/title", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input: S.brandStory.input, content: S.brandStory.content }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    document.getElementById("modalInner").innerHTML = `
+      <div class="card-title">📰 品牌故事标题建议</div>
+      <div class="hl-list">${(d.titles || []).map((t, j) => `<div class="hl-item"><span class="hl-num">${j + 1}</span><span class="hl-text">${t}</span><button class="btn btn-sm btn-outline" onclick="copyText(${JSON.stringify(t)})">复制</button></div>`).join("")}</div>
+      <button class="btn btn-outline" onclick="document.getElementById('modal').classList.remove('show')" style="margin-top:12px;">关闭</button>`;
+  } catch (e) {
+    document.getElementById("modalInner").innerHTML = '<div class="error-msg">' + e.message + '</div>';
+  }
+}
+
+async function doExportFmtBrandStory() {
+  if (!S.brandStory.content) return alert("请先生成品牌故事");
+  fmtCurrentTheme = "clean";
+  fmtCurrentStyle = "comfortable";
+  const modal = document.getElementById("modal");
+  modal.classList.add("show");
+  document.getElementById("modalInner").innerHTML = '<div class="loading-block"><div class="spinner"></div>生成排版…</div>';
+
+  try {
+    const r = await fetch("/api/export-format", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        content: S.brandStory.content,
+        title: S.brandStory.input.title || "品牌故事",
+        theme: fmtCurrentTheme,
+        style: fmtCurrentStyle,
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+
+    const themes = d.themes || {};
+    modalInner = document.getElementById("modalInner");
+    modalInner.innerHTML = `
+      <div class="card-title">📄 公众号排版</div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:0.78rem;color:var(--text-muted);">主题：</span>
+        ${Object.entries(themes).map(([k, v]) => `<button class="btn btn-sm ${k === fmtCurrentTheme ? 'btn-accent' : 'btn-outline'}" onclick="fmtCurrentTheme='${k}';doExportFmtBrandStory()">${v.name}</button>`).join("")}
+      </div>
+      <div id="fmtPreviewWrap" style="max-height:60vh;overflow-y:auto;border:1px solid var(--border);border-radius:10px;">${d.formatted}</div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-green btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('fmtPreviewWrap').innerHTML).then(()=>toast('HTML已复制'))">📋 复制HTML</button>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('modal').classList.remove('show')">关闭</button>
+      </div>`;
+  } catch (e) {
+    document.getElementById("modalInner").innerHTML = '<div class="error-msg">' + e.message + '</div>';
+  }
+}
+
+async function doHumanizeBrandStory() {
+  if (!S.brandStory.content) return alert("请先生成品牌故事");
+  const modal = document.getElementById("modal");
+  modal.classList.add("show");
+  document.getElementById("modalInner").innerHTML = '<div class="loading-block"><div class="spinner"></div>去AI味处理中…</div>';
+  try {
+    const r = await fetch("/api/humanize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: S.brandStory.content }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    S.brandStory.content = d.content;
+    document.getElementById("bsContent").innerHTML = md2html(d.content);
+    document.getElementById("bsWordCount").textContent = "约" + d.content.replace(/[#*\\-\\s\\n`>|]/g, "").length + "字";
+    modal.classList.remove("show");
+    toast("去AI味完成");
+  } catch (e) {
+    document.getElementById("modalInner").innerHTML = '<div class="error-msg">' + e.message + '</div>';
+  }
+}
 
 // ── 头条模式 ──
 S.toutiao = { feeds: {}, scraped: [], groups: [], results: [], selectedGroups: new Set() };
@@ -1143,7 +1473,7 @@ async function doToutiaoHeadlines(ri, vi) {
       ${["clickbait","opinion","information"].map(cat => `
         <div style="margin-bottom:14px;">
           <div class="hl-cat">${{clickbait:"🔥 点击欲型",opinion:"💪 态度型",information:"📊 信息型"}[cat]}</div>
-          <div class="hl-list">${(h[cat]||[]).map((t,j)=>`<div class="hl-item"><span class="hl-num">${j+1}</span><span class="hl-text">${t}</span><button class="btn btn-sm btn-outline" onclick="copyText('${t.replace(/'/g,"\\'")}')">复制</button></div>`).join("")}</div>
+          <div class="hl-list">${(h[cat]||[]).map((t,j)=>`<div class="hl-item"><span class="hl-num">${j+1}</span><span class="hl-text">${t}</span><button class="btn btn-sm btn-outline" onclick="copyText(${JSON.stringify(t)})">复制</button></div>`).join("")}</div>
       `).join("")}
       <button class="btn btn-outline" onclick="document.getElementById('modal').classList.remove('show')">关闭</button>`;
   } catch (e) { document.getElementById("modalInner").innerHTML = `<div class="error-msg">${e.message}</div>`; }
@@ -1285,8 +1615,38 @@ async function doFetchOnThisDay() {
   finally { btn.disabled = false; btn.textContent = "📥 历史上的今天"; }
 }
 
+async function doFetchFigures() {
+  const type = document.getElementById("htFigureType").value;
+  if (!type) return alert("请选择一个人物类型");
+  const btn = document.getElementById("htFetchFigBtn");
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>获取中…';
+  hideHtResults();
+  try {
+    const r = await fetch("/api/history-topic/fetch", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type })
+    });
+    const d = await r.json(); if (!r.ok) throw new Error(d.error);
+    S.historyTopic.events = (d.articles || []).map(a => ({
+      title: a.title,
+      content: a.extract || "",
+      year: null,
+      figure: a.figure || null,
+      thumbnail: a.thumbnail,
+      pages: [],
+      selected: true
+    }));
+    S.historyTopic.mode = "figures";
+    document.getElementById("htFetchTime").textContent =
+      `上次获取: ${new Date().toLocaleTimeString("zh-CN")} · 类型: ${type} · ${S.historyTopic.events.length} 个人物`;
+    renderHtEvents();
+    toast(`获取到 ${S.historyTopic.events.length} 个历史人物`);
+  } catch (e) { alert(e.message); }
+  finally { btn.disabled = false; btn.textContent = "📥 浏览人物"; }
+}
+
 async function doFetchCategory() {
-  const category = document.getElementById("htCategory").value;
+  const category = document.getElementById("htCategory")?.value;
   if (!category) return alert("请选择一个分类");
   const btn = document.getElementById("htFetchCatBtn");
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>获取中…';
@@ -1317,15 +1677,26 @@ async function doFetchCategory() {
 function renderHtEvents() {
   document.getElementById("htEventList").style.display = "block";
   document.getElementById("htEventCount").textContent = `共 ${S.historyTopic.events.length} 项`;
-  document.getElementById("htEvents").innerHTML = S.historyTopic.events.map((e, i) => `
+  document.getElementById("htEvents").innerHTML = S.historyTopic.events.map((e, i) => {
+    const isFigure = e.figure != null;
+    const figureBadge = isFigure
+      ? `<span style="background:var(--accent2);color:#fff;padding:1px 6px;border-radius:3px;font-size:0.68rem;margin-right:6px;">${e.figure.type}</span>`
+      : "";
+    return `
     <div class="scraped-item" style="align-items:flex-start;">
       <input type="checkbox" id="hte_${i}" ${e.selected ? "checked" : ""} onchange="S.historyTopic.events[${i}].selected=this.checked" />
       <div style="flex:1;">
-        <div style="font-weight:600;margin-bottom:4px;">${e.year ? `<span style="color:var(--accent2);">${e.year}年</span> · ` : ""}${e.title}</div>
+        <div style="font-weight:600;margin-bottom:4px;">
+          ${isFigure ? `<span style="color:var(--accent2);">${e.figure.dynasty}</span> · ` : ""}
+          ${e.year ? `<span style="color:var(--accent2);">${e.year}年</span> · ` : ""}
+          ${figureBadge}
+          ${e.title}
+        </div>
         <div style="font-size:0.78rem;color:var(--text-muted);line-height:1.6;">${(e.content || "").slice(0, 200)}${(e.content || "").length > 200 ? "…" : ""}</div>
         ${e.thumbnail ? `<img src="${e.thumbnail}" style="max-width:120px;max-height:80px;border-radius:6px;margin-top:6px;display:block;" onerror="this.style.display='none'" />` : ""}
       </div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
 }
 
 function selectAllHtEvents() {
@@ -1355,15 +1726,20 @@ async function doHistoryRewrite() {
   S.historyTopic.results = [];
   try {
     for (const evt of events) {
+      const body = { title: evt.title, content: evt.content };
+      if (evt.figure) body.figure = evt.figure;
+      const master = document.getElementById("masterSelect").value;
+      if (master) body.master = master;
       const r = await fetch("/api/history-topic/rewrite", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: evt.title, content: evt.content })
+        body: JSON.stringify(body)
       });
       const d = await r.json();
       if (r.ok && d.versions) {
         S.historyTopic.results.push({
           topic: evt.title,
           year: evt.year,
+          figure: evt.figure || null,
           versions: d.versions,
           images: d.images
         });
@@ -1414,9 +1790,12 @@ function renderHtResults() {
         <span>${res.year ? `<span style="color:var(--accent2);">${res.year}年</span> · ` : ""}${res.topic}</span>
       </div>
       ${res.images ? renderImagesBlock(res.images) : ""}
-      <div class="v-tabs">${res.versions.map((v, vi) =>
-        `<div class="v-tab ${vi===0?'active':''}" onclick="switchHtVersion(${ri},${vi})">${v.label||v.version}<div class="vt-desc">${["深度叙事","轻松科普","观点史评"][vi]}</div></div>`
-      ).join("")}</div>
+      <div class="v-tabs">${res.versions.map((v, vi) => {
+        const tabDesc = res.versions.length >= 5
+          ? ["深度叙事","轻松科普","观点史评","头条爆款","正野史对撞"][vi] || ""
+          : ["深度叙事","轻松科普","观点史评","头条爆款"][vi] || "";
+        return `<div class="v-tab ${vi===0?'active':''}" onclick="switchHtVersion(${ri},${vi})">${v.label||v.version}<div class="vt-desc">${tabDesc}</div></div>`;
+      }).join("")}</div>
       <div id="htv_${ri}" class="result-content">${md2html(res.versions[0]?.content||"")}</div>
       <div style="margin-top:14px;display:flex;gap:6px;flex-wrap:wrap;">
         <button class="btn btn-sm btn-accent" onclick="doExportFmtHt(${ri},getActiveHtVi(${ri}))">📄 排版导出</button>
@@ -1509,17 +1888,18 @@ async function doHistoryHeadlines(ri, vi) {
     const d = await r.json(); if (!r.ok) throw new Error(d.error);
     const h = d.headlines || {};
     const cats = [
+      { key: "toutiao", label: "头条爆款", emoji: "🚀" },
       { key: "gongzhonghao", label: "公众号长文", emoji: "📖" },
       { key: "clickbait", label: "点击欲", emoji: "🔥" },
       { key: "opinion", label: "态度型", emoji: "💬" },
     ];
     document.getElementById("modalInner").innerHTML = `
-      <div class="card-title">🔥 三段式标题 — ${res.topic}</div>
+      <div class="card-title">🔥 标题工厂 — ${res.topic}</div>
       ${cats.map(c => `
         <div style="margin-bottom:16px;">
           <div style="font-size:0.78rem;color:var(--accent2);font-weight:700;margin-bottom:6px;">${c.emoji} ${c.label}</div>
           ${(h[c.key]||[]).map((t,i) => `
-            <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:0.88rem;cursor:pointer;" onclick="copyText('${t.replace(/'/g,"\\'")}');toast('已复制')">
+            <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:0.88rem;cursor:pointer;" onclick="copyText(${JSON.stringify(t)});toast('已复制')">
               <span style="color:var(--text-muted);flex-shrink:0;">${i+1}.</span>
               <span style="flex:1;line-height:1.5;">${t}</span>
               <span style="color:var(--text-muted);flex-shrink:0;font-size:0.7rem;">📋</span>
@@ -1566,7 +1946,7 @@ async function doHistoryDedup() {
 }
 
 // ── 初始化 ──
-addStyleArticle(); addStyleArticle(); loadStyles();
+addStyleArticle(); addStyleArticle(); loadStyles(); loadMasters();
 document.getElementById("modal").addEventListener("click",e=>{if(e.target===document.getElementById("modal"))e.target.classList.remove("show");});
 </script>
 </body>
