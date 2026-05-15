@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>民宿管家</title>
+<style>
+:root{--bg:#f5f3ee;--card:#fff;--text:#2c2416;--muted:#8a8070;--accent:#5b6e4d;--danger:#c45;--warn:#d4922a;--free:#6d9b5e;--border:#e8e2d6}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,"Microsoft YaHei",sans-serif;max-width:480px;margin:0 auto;padding:12px;padding-bottom:80px}
+h2{font-size:18px;margin:18px 0 10px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
+.stat{border-radius:12px;padding:14px;text-align:center;background:var(--card)}
+.stat .n{font-size:28px;font-weight:bold}
+.stat .l{font-size:11px;color:var(--muted);margin-top:2px}
+.stat.g{color:var(--accent)}.stat.r{color:var(--danger)}.stat.b{color:var(--warn)}.stat.m{color:var(--muted)}
+
+.room-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.room{border-radius:10px;padding:10px 6px;text-align:center;font-size:12px;cursor:pointer;background:var(--card);border:2px solid var(--border);transition:.15s}
+.room .rno{font-weight:bold;font-size:14px}.room .rt{font-size:10px;color:var(--muted);margin-top:2px}
+.room.free{border-color:#6d9b5e;background:#edf5e8}.room.free .rno{color:#4a7a3a}
+.room.occupied{border-color:#d67;background:#fef0f0}.room.occupied .rno{color:#c45}
+.room.booked{border-color:#d4922a;background:#fdf5e8}.room.booked .rno{color:#b8731a}
+.room.maintenance{border-color:#999;background:#eee;opacity:.6}
+.room:active{transform:scale(.96)}
+
+.tabs{display:flex;gap:6px;margin:14px 0}
+.tab{flex:1;padding:10px;text-align:center;border-radius:8px;font-size:13px;background:var(--card);border:1px solid var(--border);cursor:pointer;transition:.15s}
+.tab.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+.form{background:var(--card);border-radius:12px;padding:16px;margin:10px 0}
+.form input,.form select{width:100%;padding:12px;margin:6px 0;border:1px solid var(--border);border-radius:8px;font-size:15px;background:#fafaf7}
+.form label{font-size:12px;color:var(--muted);display:block;margin-top:6px}
+.form .row{display:flex;gap:8px}.form .row>*{flex:1}
+.btn{width:100%;padding:14px;border:none;border-radius:10px;font-size:16px;font-weight:bold;cursor:pointer;margin:6px 0;transition:.15s}
+.btn.p{background:var(--accent);color:#fff}.btn.d{background:var(--danger);color:#fff}.btn.w{background:var(--warn);color:#fff}
+.btn:active{opacity:.8}
+
+.list-item{background:var(--card);border-radius:10px;padding:14px;margin:8px 0;border-left:4px solid var(--accent)}
+.list-item.checked{border-left-color:var(--muted);opacity:.6}
+.list-item .top{display:flex;justify-content:space-between;align-items:center}
+.list-item .gname{font-size:15px;font-weight:bold}
+.list-item .rno{font-size:12px;color:var(--muted)}
+.list-item .detail{font-size:13px;color:var(--muted);margin-top:4px}
+
+.modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:100;display:flex;align-items:flex-end;justify-content:center}
+.modal .mbody{background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto}
+.modal .close{float:right;font-size:22px;cursor:pointer;padding:4px 8px;color:var(--muted)}
+
+.summary{background:var(--card);border-radius:12px;padding:16px;margin:10px 0;text-align:center}
+.summary .big{font-size:36px;font-weight:bold;color:var(--accent)}
+.summary .sub{font-size:12px;color:var(--muted)}
+
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 24px;border-radius:20px;font-size:14px;z-index:200;pointer-events:none;opacity:0;transition:.3s}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div id="toast" class="toast"></div>
+
+<!-- 今日概览 -->
+<div id="stats" class="stats"></div>
+
+<!-- 房间看板 -->
+<div style="display:flex;justify-content:space-between;align-items:center;margin:18px 0 4px">
+  <h2 style="margin:0">🛏 房态 <span style="font-size:12px;color:var(--muted);font-weight:normal">（点房间操作）</span></h2>
+  <button onclick="showRoomSettings()" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px 14px;font-size:13px;color:var(--muted);cursor:pointer;">⚙ 房间设置</button>
+</div>
+<div id="rooms" class="room-grid"></div>
+
+<!-- 功能标签 -->
+<div class="tabs">
+  <div class="tab on" data-tab="checkin">📥 入住</div>
+  <div class="tab" data-tab="booking">📅 预订</div>
+  <div class="tab" data-tab="records">📋 记录</div>
+  <div class="tab" data-tab="revenue">💰 收入</div>
+</div>
+
+<div id="panel"></div>
+
+<!-- 房间操作弹窗 -->
+<div id="modal" class="modal" style="display:none" onclick="if(event.target===this)closeModal()"><div class="mbody" id="mbody"></div></div>
+
+<script>
+const API = "/api/minsu";
+
+async function get(url) { return (await fetch(API+url)).json(); }
+async function post(url, body) {
+  const r = await fetch(API+url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json(); throw new Error(e.error || "出错"); }
+  return r.json();
+}
+
+function toast(msg) { const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),1800); }
+
+async function loadStats() {
+  const d = await get("/today");
+  document.getElementById("stats").innerHTML =
+    `<div class="stat g"><div class="n">${d.active}</div><div class="l">当前入住</div></div>
+     <div class="stat b"><div class="n">${d.bookingCount}</div><div class="l">预订中</div></div>
+     <div class="stat r"><div class="n">¥${d.todayRevenue}</div><div class="l">今日收入</div></div>
+     <div class="stat m"><div class="n">${d.todayCheckIn}</div><div class="l">今日入住</div></div>`;
+}
+
+async function loadRooms() {
+  const rooms = await get("/rooms");
+  const statusMap = { "空闲":"free","已入住":"occupied","已预订":"booked","维修中":"maintenance" };
+  const div = document.getElementById("rooms");
+  div.innerHTML = rooms.map(r => `
+    <div class="room ${statusMap[r.status]||''}" onclick="roomAction('${r.id}','${r.status}','${r.activeGuest||''}','${r.bookingDate||''}',${r.price})">
+      <div class="rno">${r.id}</div><div class="rt">${r.status==='已入住'?r.activeGuest.slice(0,3)+'…':r.type} ${r.status==='维修中'?'':''}</div>
+    </div>`).join('');
+}
+
+function openModal(html) { document.getElementById("mbody").innerHTML = html; document.getElementById("modal").style.display="flex"; }
+function closeModal() { document.getElementById("modal").style.display="none"; }
+
+function roomAction(id, status, guest, bdate, price) {
+  let html = `<div><span class="close" onclick="closeModal()">✕</span><h3>${id} — ${status}</h3></div>`;
+  if (status === "空闲") {
+    html += `<p style="color:var(--muted);">房型：¥${price}</p>`;
+    html += `<button class="btn p" onclick="closeModal();showPanel('checkin','${id}')">📥 办入住</button>`;
+    html += `<button class="btn w" onclick="closeModal();showPanel('booking','${id}')">📅 预订</button>`;
+    html += `<button class="btn d" onclick="closeModal();doMaintenance('${id}')">🔧 设为维修</button>`;
+  } else if (status === "已入住") {
+    html += `<p>当前客人：<b>${guest}</b></p>`;
+    html += `<button class="btn d" onclick="closeModal();doCheckout('${id}')">📤 退房</button>`;
+  } else if (status === "已预订") {
+    html += `<p>预订日期：${bdate}</p>`;
+    html += `<button class="btn p" onclick="closeModal();bookCheckIn('${id}')">📥 预订转入住</button>`;
+    html += `<button class="btn d" onclick="closeModal();cancelBook('${id}')">取消预订</button>`;
+  } else if (status === "维修中") {
+    html += `<button class="btn p" onclick="closeModal();doMaintenance('${id}')">🔧 恢复可用</button>`;
+  }
+  openModal(html);
+}
+
+async function doCheckout(roomId) {
+  const records = await get("/records?status=已入住");
+  const r = records.items.find(e => e.roomId === roomId);
+  if (!r) return toast("未找到入住记录");
+  if (!confirm(`${roomId} 退房？\n${r.guestName} ¥${r.amount}`)) return;
+  await post("/checkout", { recordId: r.id });
+  toast("退房成功");
+  refresh();
+}
+
+async function doMaintenance(roomId) {
+  const rooms = await get("/rooms");
+  const room = rooms.find(r => r.id === roomId);
+  const newState = room.status === "维修中" ? false : true;
+  await post("/room/update", { roomId, maintenance: newState });
+  toast(newState ? "已设为维修中" : "已恢复可用");
+  refresh();
+}
+
+function showPanel(tab, roomId) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("on"));
+  if (tab === "checkin") {
+    document.querySelector('[data-tab="checkin"]').classList.add("on");
+    document.getElementById("panel").innerHTML = checkinForm(roomId);
+  } else if (tab === "booking") {
+    document.querySelector('[data-tab="booking"]').classList.add("on");
+    document.getElementById("panel").innerHTML = bookingForm(roomId);
+  }
+}
+
+async function bookCheckIn(roomId) {
+  const bookings = await get("/bookings?status=已预订");
+  const b = bookings.find(b => b.roomId === roomId);
+  if (!b) return toast("未找到预订记录");
+  const amt = prompt("实收金额（0=不定价）：", "");
+  if (amt === null) return;
+  await post("/booking/checkin", { bookingId: b.id, amount: amt ? parseInt(amt) : undefined });
+  toast("预订转入住");
+  refresh();
+}
+
+async function cancelBook(roomId) {
+  const bookings = await get("/bookings?status=已预订");
+  const b = bookings.find(b => b.roomId === roomId);
+  if (!b) return toast("未找到预订记录");
+  if (!confirm(`取消 ${b.guestName} 的预订？`)) return;
+  await post("/booking/cancel", { bookingId: b.id });
+  toast("已取消");
+  refresh();
+}
+
+function checkinForm(roomId) {
+  return `<div class="form">
+    <h3>📥 办理入住</h3>
+    <label>房间</label><input id="ciRoom" value="${roomId||''}" placeholder="如 101">
+    <label>客人姓名 *</label><input id="ciName" placeholder="姓名">
+    <div class="row"><div><label>手机</label><input id="ciPhone" placeholder="手机号"></div><div><label>身份证号</label><input id="ciId" placeholder="选填"></div></div>
+    <div class="row"><div><label>入住日期</label><input id="ciIn" type="date" value="${today()}"></div><div><label>离店日期</label><input id="ciOut" type="date" value="${daysLater(2)}"></div></div>
+    <div class="row"><div><label>金额</label><input id="ciAmt" type="number" placeholder="0=默认房价"></div><div><label>支付方式</label><select id="ciPay"><option>微信</option><option>支付宝</option><option>现金</option><option>到付</option></select></div></div>
+    <label>备注</label><input id="ciNote" placeholder="选填">
+    <button class="btn p" onclick="doCheckIn()">确认入住</button>
+  </div>`;
+}
+
+async function doCheckIn() {
+  const roomId = document.getElementById("ciRoom").value;
+  const guestName = document.getElementById("ciName").value;
+  if (!roomId || !guestName) return toast("房间和姓名必填");
+  await post("/checkin", {
+    roomId, guestName,
+    phone: document.getElementById("ciPhone").value,
+    idNumber: document.getElementById("ciId").value,
+    checkIn: document.getElementById("ciIn").value,
+    checkOut: document.getElementById("ciOut").value,
+    amount: parseInt(document.getElementById("ciAmt").value) || 0,
+    payment: document.getElementById("ciPay").value,
+    note: document.getElementById("ciNote").value,
+  });
+  toast("入住成功");
+  refresh();
+  document.getElementById("panel").innerHTML = "";
+}
+
+function bookingForm(roomId) {
+  return `<div class="form">
+    <h3>📅 预订</h3>
+    <label>房间</label><input id="bkRoom" value="${roomId||''}" placeholder="如 201">
+    <label>客人姓名 *</label><input id="bkName" placeholder="姓名">
+    <div class="row"><div><label>手机</label><input id="bkPhone" placeholder="手机号"></div></div>
+    <div class="row"><div><label>入住日期</label><input id="bkFrom" type="date" value="${today()}"></div><div><label>离店日期</label><input id="bkTo" type="date" value="${daysLater(2)}"></div></div>
+    <label>备注</label><input id="bkNote" placeholder="选填">
+    <button class="btn w" onclick="doBooking()">确认预订</button>
+  </div>`;
+}
+
+async function doBooking() {
+  const roomId = document.getElementById("bkRoom").value;
+  const guestName = document.getElementById("bkName").value;
+  if (!roomId || !guestName) return toast("房间和姓名必填");
+  await post("/booking", {
+    roomId, guestName,
+    phone: document.getElementById("bkPhone").value,
+    from: document.getElementById("bkFrom").value,
+    to: document.getElementById("bkTo").value,
+    note: document.getElementById("bkNote").value,
+  });
+  toast("预订成功");
+  refresh();
+  document.getElementById("panel").innerHTML = "";
+}
+
+async function showRecords() {
+  const data = await get("/records");
+  let html = '<h3 style="margin-top:8px">📋 住宿记录</h3>';
+  data.items.slice(0, 20).forEach(r => {
+    html += `<div class="list-item ${r.status==='已退房'?'checked':''}">
+      <div class="top"><span class="gname">${r.guestName}</span><span class="rno">${r.roomId} ${r.status}</span></div>
+      <div class="detail">📞 ${r.phone} | 🏷 ¥${r.amount} ${r.payment} | 📅 ${r.checkIn} → ${r.checkOut}</div>
+    </div>`;
+  });
+  document.getElementById("panel").innerHTML = html || '<p style="color:var(--muted);text-align:center;padding:20px">暂无记录</p>';
+}
+
+async function showRevenue() {
+  const m = await get("/revenue?from="+monthStart()+"&to="+today());
+  let html = `<div class="summary"><div class="sub">本月收入</div><div class="big">¥${m.total}</div><div class="sub">${m.count} 笔</div></div>`;
+  m.items.slice(0, 15).forEach(r => {
+    html += `<div class="list-item"><div class="top"><span class="gname">${r.guestName}</span><span style="font-weight:bold">¥${r.amount}</span></div><div class="detail">${r.roomId} | ${r.payment} | ${r.date}</div></div>`;
+  });
+  document.getElementById("panel").innerHTML = html;
+}
+
+async function showBookings() {
+  const data = await get("/bookings");
+  let html = '<h3 style="margin-top:8px">📅 预订列表</h3>';
+  data.forEach(b => {
+    html += `<div class="list-item"><div class="top"><span class="gname">${b.guestName}</span><span class="rno">${b.roomId}</span></div><div class="detail">📞 ${b.phone} | 📅 ${b.from} → ${b.to} | ${b.status}</div></div>`;
+  });
+  document.getElementById("panel").innerHTML = html || '<p style="color:var(--muted);text-align:center;padding:20px">暂无预订</p>';
+}
+
+function today(){ return new Date().toISOString().slice(0,10); }
+function daysLater(n){ const d=new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function monthStart(){ return today().slice(0,8)+'01'; }
+
+async function refresh() { await loadStats(); await loadRooms(); }
+
+document.querySelectorAll(".tab").forEach(t => {
+  t.addEventListener("click", function() {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("on"));
+    this.classList.add("on");
+    const panel = document.getElementById("panel");
+    if (this.dataset.tab === "checkin") panel.innerHTML = checkinForm("");
+    else if (this.dataset.tab === "booking") panel.innerHTML = bookingForm("");
+    else if (this.dataset.tab === "records") showRecords();
+    else if (this.dataset.tab === "revenue") showRevenue();
+  });
+});
+
+async function showRoomSettings() {
+  const rooms = await get("/rooms");
+  let html = `<div><span class="close" onclick="closeModal()">✕</span><h3>⚙ 房间设置</h3></div>`;
+  rooms.forEach(r => {
+    html += `<div class="form" style="margin:8px 0;padding:12px">
+      <div class="row">
+        <div><label>房号</label><input id="rn_${r.id}" value="${r.id}" style="font-size:14px;padding:8px"></div>
+        <div><label>房型</label><input id="rt_${r.id}" value="${r.type}" style="font-size:14px;padding:8px"></div>
+        <div><label>价格</label><input id="rp_${r.id}" type="number" value="${r.price}" style="font-size:14px;padding:8px"></div>
+      </div>
+      <button class="btn" style="background:#e8e2d6;color:#888;padding:6px;font-size:11px;margin-top:6px" onclick="deleteRoom('${r.id}')">删除此房</button>
+    </div>`;
+  });
+  html += `<div class="form" style="margin:8px 0;padding:12px">
+    <h4 style="margin-bottom:8px;color:var(--accent)">✚ 添加新房间</h4>
+    <div class="row">
+      <div><label>房号</label><input id="addRoomId" placeholder="如 888" style="font-size:14px;padding:8px"></div>
+      <div><label>房型</label><input id="addRoomType" placeholder="大床房" style="font-size:14px;padding:8px"></div>
+      <div><label>价格</label><input id="addRoomPrice" type="number" value="200" style="font-size:14px;padding:8px"></div>
+    </div>
+    <button class="btn p" style="margin-top:8px" onclick="addNewRoom()">添加房间</button>
+  </div>`;
+  html += `<button class="btn p" onclick="saveRoomSettings()">💾 保存所有修改</button>`;
+  openModal(html);
+}
+
+async function addNewRoom() {
+  const id = document.getElementById("addRoomId").value;
+  const type = document.getElementById("addRoomType").value;
+  const price = document.getElementById("addRoomPrice").value;
+  if (!id) return toast("房号必填");
+  try {
+    await post("/room/add", { id, type, price });
+    toast("房间已添加");
+    await showRoomSettings();
+  } catch(e) { toast(e.message); }
+}
+
+async function saveRoomSettings() {
+  const rooms = await get("/rooms");
+  for (const r of rooms) {
+    const newId = document.getElementById("rn_"+r.id).value;
+    const type = document.getElementById("rt_"+r.id).value;
+    const price = document.getElementById("rp_"+r.id).value;
+    await post("/room/update", { roomId: r.id, newId, type, price });
+  }
+  toast("已保存");
+  closeModal();
+  refresh();
+}
+
+async function deleteRoom(id) {
+  if (!confirm("删除房间 "+id+"？相关记录也会删除。")) return;
+  try {
+    await post("/room/delete", { roomId: id });
+    toast("已删除");
+    await showRoomSettings();
+  } catch(e) { toast(e.message); }
+}
+
+refresh();
+</script>
+</body>
+</html>
