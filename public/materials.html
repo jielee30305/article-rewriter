@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>素材管理</title>
+<style>
+  :root { --bg: #1a1a1a; --card: #242424; --text: #ddd; --muted: #888; --border: #333; --accent: #c9a96e; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:"Microsoft YaHei",sans-serif; padding:24px; max-width:1100px; margin:0 auto; }
+  h1 { font-size: 20px; margin-bottom: 20px; color: var(--accent); }
+  .bar { display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+  .bar select, .bar button { background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px 14px; font-size:13px; cursor:pointer; }
+  .bar button { background:var(--accent); color:#1a1a1a; border:none; font-weight:bold; }
+  .bar button.ghost { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  .stat { color:var(--muted); font-size:12px; margin-left:auto; }
+  .stat b { color:var(--text); }
+  textarea { width:100%; min-height:120px; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:14px; font-size:14px; font-family:inherit; resize:vertical; margin-bottom:10px; }
+  .row { display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+  .row input { background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px 12px; font-size:13px; flex:1; min-width:120px; }
+  .row select { background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px 12px; font-size:13px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:left; color:var(--muted); font-weight:normal; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; }
+  td { padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.05); vertical-align:top; }
+  td.preview { max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); }
+  .tag { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; background:rgba(201,169,110,0.15); color:var(--accent); }
+  .tag.used { background:rgba(100,180,130,0.15); color:#8cc9a0; }
+  .tag.pub { background:rgba(120,150,210,0.15); color:#90b0e0; }
+  select.status { background:transparent; color:var(--text); border:1px solid var(--border); border-radius:4px; padding:4px 8px; font-size:12px; }
+  button.small { background:transparent; color:var(--muted); border:none; cursor:pointer; font-size:12px; padding:2px 4px; }
+  button.small:hover { color:#e55; }
+  .empty { text-align:center; padding:40px; color:var(--muted); }
+  hr { border:none; border-top:1px solid var(--border); margin:24px 0; }
+  .section-title { font-size:14px; color:var(--muted); margin-bottom:10px; }
+  .pk { display:inline-block; padding:1px 6px; border-radius:8px; font-size:10px; margin-right:2px; background:rgba(255,255,255,0.06); color:var(--muted); }
+  .pk.on { background:rgba(201,169,110,0.2); color:var(--accent); }
+  .plat-toggle { display:inline-flex; gap:8px; flex-wrap:wrap; }
+  .plat-toggle label { font-size:11px; color:var(--muted); cursor:pointer; display:inline-flex; align-items:center; gap:3px; }
+  .plat-toggle input { accent-color:var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>素材管理</h1>
+
+<div class="section-title">✚ 新素材</div>
+<textarea id="txt" placeholder="在此粘贴素材..."></textarea>
+<div class="row">
+  <input id="tag" placeholder="标签，如：感悟/婚姻/器物/饮食 (可选)">
+  <select id="status">
+    <option value="素材">素材（还没跑）</option>
+    <option value="已改写">已改写（跑过AI了）</option>
+    <option value="已发">已发（已发布）</option>
+  </select>
+  <button onclick="add()">添加</button>
+</div>
+<div class="plat-toggle" style="margin-bottom:14px; padding-left:2px;">
+  <span style="font-size:11px;color:var(--muted);margin-right:4px;">发布平台:</span>
+  <label><input type="checkbox" class="plat-add" value="toutiao"> 头条</label>
+  <label><input type="checkbox" class="plat-add" value="jianshu"> 简书</label>
+  <label><input type="checkbox" class="plat-add" value="gzh"> 公众号</label>
+  <label><input type="checkbox" class="plat-add" value="xhs"> 小红书</label>
+  <label><input type="checkbox" class="plat-add" value="douyin"> 抖音</label>
+</div>
+
+<hr>
+
+<div class="bar">
+  <select id="filter" onchange="render()">
+    <option value="全部">全部</option>
+    <option value="素材">🟡 素材</option>
+    <option value="已改写">🟢 已改写</option>
+    <option value="已发">🔵 已发</option>
+  </select>
+  <select id="tagFilter" onchange="render()">
+    <option value="全部">所有标签</option>
+  </select>
+  <select id="platFilter" onchange="render()">
+    <option value="全部">所有平台</option>
+    <option value="未发头条">未发·头条</option>
+    <option value="未发简书">未发·简书</option>
+    <option value="未发公众号">未发·公众号</option>
+    <option value="未发小红书">未发·小红书</option>
+    <option value="未发抖音">未发·抖音</option>
+  </select>
+  <span class="stat">共 <b id="count">0</b> 条</span>
+  <button class="ghost" onclick="exportData()">导出备份</button>
+  <button class="ghost" onclick="document.getElementById('importFile').click()">导入备份</button>
+  <input type="file" id="importFile" style="display:none" accept=".json" onchange="importData(event)">
+</div>
+
+<table id="table">
+  <thead><tr><th style="width:30%">素材内容</th><th>标签</th><th>状态</th><th>已发平台</th><th style="width:100px">时间</th><th></th></tr></thead>
+  <tbody></tbody>
+</table>
+
+<div id="empty" class="empty" style="display:none">暂无素材。在上方粘贴第一条。</div>
+
+<script>
+const PLATFORMS = [
+  { key: 'toutiao', label: '头条' },
+  { key: 'jianshu', label: '简书' },
+  { key: 'gzh', label: '公众号' },
+  { key: 'xhs', label: '小红书' },
+  { key: 'douyin', label: '抖音' },
+];
+
+const STORAGE_KEY = 'materials_db';
+let materials = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+
+// migrate old data
+materials = materials.map(m => {
+  if (!m.platforms) m.platforms = {};
+  PLATFORMS.forEach(p => { if (m.platforms[p.key] === undefined) m.platforms[p.key] = false; });
+  return m;
+});
+
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(materials)); }
+
+function getPlatAdd() {
+  const checks = document.querySelectorAll('.plat-add:checked');
+  const obj = {};
+  PLATFORMS.forEach(p => { obj[p.key] = false; });
+  checks.forEach(cb => { obj[cb.value] = true; });
+  return obj;
+}
+
+function add() {
+  const txt = document.getElementById('txt').value.trim();
+  if (!txt) return;
+  materials.push({
+    id: Date.now(),
+    text: txt,
+    tag: document.getElementById('tag').value.trim() || '未分类',
+    status: document.getElementById('status').value,
+    platforms: getPlatAdd(),
+    createdAt: new Date().toISOString().slice(0,10)
+  });
+  document.getElementById('txt').value = '';
+  document.getElementById('tag').value = '';
+  document.querySelectorAll('.plat-add').forEach(cb => cb.checked = false);
+  save();
+  render();
+}
+
+var _matText = '';
+
+function togglePlat(id, key) {
+  const m = materials.find(m => m.id === id);
+  if (!m) return;
+  if (!m.platforms) m.platforms = {};
+  m.platforms[key] = !m.platforms[key];
+  save();
+  render();
+}
+
+function renderPlatBadges(m) {
+  if (!m.platforms) return '<span style="color:var(--muted);font-size:10px;">—</span>';
+  return PLATFORMS.map(p => {
+    const on = m.platforms[p.key];
+    return `<span class="pk${on?' on':''}" title="${p.label}${on?'':'（未发）'}">${p.label}</span>`;
+  }).join('');
+}
+
+function viewMaterial(id) {
+  const m = materials.find(m => m.id === id);
+  if (!m) return;
+  _matText = m.text;
+  const platToggles = PLATFORMS.map(p => {
+    const on = m.platforms && m.platforms[p.key];
+    return `<label style="cursor:pointer;font-size:11px;color:${on?'#c9a96e':'#888'}"><input type="checkbox" ${on?'checked':''} onchange="togglePlat(${m.id},'${p.key}')" style="accent-color:#c9a96e"> ${p.label}</label>`;
+  }).join(' &nbsp;');
+
+  const div = document.createElement('div');
+  div.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center';
+  div.innerHTML = '<div style="background:#242424;border-radius:12px;padding:24px;max-width:520px;width:90%;max-height:80vh;overflow-y:auto;border:1px solid #333">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
+      '<span style="font-size:12px;color:#8a8070">🏷 ' + m.tag + ' | ' + m.status + ' | ' + m.createdAt + '</span>' +
+      '<span style="cursor:pointer;font-size:20px;color:#8a8070" onclick="this.closest(\'div\').parentElement.parentElement.remove()">✕</span>' +
+    '</div>' +
+    '<div style="white-space:pre-wrap;line-height:2;font-size:14px;margin:12px 0;color:#ddd">' + m.text.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>' +
+    '<div style="margin-bottom:12px"><span style="font-size:11px;color:#888;">已发布:</span> ' + platToggles + '</div>' +
+    '<div style="display:flex;gap:8px">' +
+      '<button id="copyBtn" style="background:#c9a96e;color:#1a1a1a;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:bold;cursor:pointer">📋 复制全文</button>' +
+      '<button onclick="this.closest(\'div\').parentElement.remove()" style="background:transparent;border:1px solid #333;color:#888;padding:10px 20px;border-radius:8px;font-size:13px;cursor:pointer">关闭</button>' +
+    '</div>' +
+  '</div>';
+  div.onclick = function(e) { if (e.target === div) div.remove(); };
+  document.body.appendChild(div);
+  document.getElementById('copyBtn').onclick = function() {
+    var ta = document.createElement('textarea');
+    ta.value = _matText;
+    ta.style.position = 'fixed'; ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    this.textContent = '已复制！';
+    var self = this;
+    setTimeout(function(){ self.textContent = '📋 复制全文'; }, 1500);
+  };
+}
+
+function del(id) {
+  if (!confirm('删除？')) return;
+  materials = materials.filter(m => m.id !== id);
+  save();
+  render();
+}
+
+function updateStatus(id, status) {
+  const m = materials.find(m => m.id === id);
+  if (m) { m.status = status; save(); render(); }
+}
+
+function render() {
+  const filter = document.getElementById('filter').value;
+  const tagFilter = document.getElementById('tagFilter').value;
+  const platFilter = document.getElementById('platFilter').value;
+
+  let filtered = materials;
+  if (filter !== '全部') filtered = filtered.filter(m => m.status === filter);
+  if (tagFilter !== '全部') filtered = filtered.filter(m => m.tag === tagFilter);
+  if (platFilter !== '全部') {
+    const key = { '未发头条':'toutiao','未发简书':'jianshu','未发公众号':'gzh','未发小红书':'xhs','未发抖音':'douyin' }[platFilter];
+    filtered = filtered.filter(m => !m.platforms || !m.platforms[key]);
+  }
+
+  // Build tag list
+  const tags = [...new Set(materials.map(m => m.tag))];
+  const tagSel = document.getElementById('tagFilter');
+  const curTag = tagSel.value;
+  tagSel.innerHTML = '<option value="全部">所有标签</option>' + tags.map(t => `<option value="${t}">${t}</option>`).join('');
+  if (tags.includes(curTag)) tagSel.value = curTag;
+
+  document.getElementById('count').textContent = filtered.length;
+
+  const tbody = document.querySelector('#table tbody');
+  const empty = document.getElementById('empty');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = filtered.map(m => {
+    const statusClass = { '素材':'', '已改写':'used', '已发':'pub' }[m.status] || '';
+    const preview = m.text.length > 80 ? m.text.slice(0,80) + '...' : m.text;
+    return `<tr>
+      <td class="preview" title="点击查看全文" onclick="viewMaterial(${m.id})" style="cursor:pointer;">${preview}</td>
+      <td><span class="tag">${m.tag}</span></td>
+      <td>
+        <select class="status ${statusClass}" onchange="updateStatus(${m.id}, this.value)">
+          <option value="素材" ${m.status==='素材'?'selected':''}>素材</option>
+          <option value="已改写" ${m.status==='已改写'?'selected':''}>已改写</option>
+          <option value="已发" ${m.status==='已发'?'selected':''}>已发</option>
+        </select>
+      </td>
+      <td>${renderPlatBadges(m)}</td>
+      <td style="color:var(--muted);font-size:11px;">${m.createdAt}</td>
+      <td><button class="small" onclick="del(${m.id})">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(materials, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.download = '素材备份_' + new Date().toISOString().slice(0,10) + '.json';
+  a.href = URL.createObjectURL(blob);
+  a.click();
+}
+
+function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!Array.isArray(data)) throw new Error('格式不对');
+      const merge = confirm(`导入 ${data.length} 条素材。合并还是覆盖？\n确定=合并  取消=覆盖`);
+      if (merge) {
+        const ids = new Set(materials.map(m=>m.id));
+        materials = materials.concat(data.filter(d=>!ids.has(d.id)));
+      } else {
+        materials = data;
+      }
+      save();
+      render();
+      alert('导入完成：' + materials.length + ' 条');
+    } catch(err) {
+      alert('导入失败：' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+render();
+</script>
+</body>
+</html>
